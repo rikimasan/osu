@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using osu.Game.Rulesets.Catch.Objects;
+using osu.Game.Rulesets.Catch.UI;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Objects;
 
@@ -20,10 +21,17 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
         /// </summary>
         public readonly float NormalizedX;
 
+        public readonly double NormalizedWalkSpeed;
+
+        public readonly double NormalizedDashSpeed;
+
         public CatchDifficultyHitObject(HitObject hitObject, HitObject lastObject, double clockRate, float halfCatcherWidth, List<DifficultyHitObject> objects, int index)
             : base(hitObject, lastObject, clockRate, objects, index)
         {
             NormalizedX = BaseObject.EffectiveX / halfCatcherWidth;
+            // These could probably hook into lazer mods for variable rate mods like wind up or wtv
+            NormalizedWalkSpeed = clockRate * Catcher.BASE_WALK_SPEED / halfCatcherWidth;
+            NormalizedDashSpeed = clockRate * Catcher.BASE_DASH_SPEED / halfCatcherWidth;
         }
     }
 }
