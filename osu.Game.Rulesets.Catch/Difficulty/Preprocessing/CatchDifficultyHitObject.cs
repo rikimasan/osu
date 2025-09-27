@@ -20,16 +20,10 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Preprocessing
         /// </summary>
         public readonly float NormalizedX;
 
-        /// <summary>
-        /// Normalized position of <see cref="LastObject"/>.
-        /// </summary>
-        public readonly float PrevNormalizedX;
-
         public CatchDifficultyHitObject(HitObject hitObject, HitObject lastObject, double clockRate, float halfCatcherWidth, List<DifficultyHitObject> objects, int index)
             : base(hitObject, lastObject, clockRate, objects, index)
         {
             NormalizedX = BaseObject.EffectiveX / halfCatcherWidth;
-            PrevNormalizedX = LastObject.EffectiveX / halfCatcherWidth;
         }
     }
 }
