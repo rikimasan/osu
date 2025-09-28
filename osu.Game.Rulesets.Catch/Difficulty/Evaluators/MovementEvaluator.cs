@@ -21,7 +21,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
         private static double calcHyperMult(CatchDifficultyHitObject current, CatchDifficultyHitObject prev, double startPos)
         {
             if (!prev.BaseObject.HyperDash) return 1.0;
-
+            // When hyperdash is true the following is guareteed to be greater than 1.0
             double dx = Math.Abs(current.NormalizedX - startPos);
             double dt = Math.Max(1.0, current.DeltaTime - 1000.0 / 60.0);
             double vReq = dx / dt;
@@ -79,7 +79,6 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double minDashDuration = extraNeeded / (effectiveDashSpeed - effectiveWalkSpeed);
 
             double loCandidate = dashPressTime + minDashDuration;
-            // Ensure ordering; allow degenerate range if infeasible.
             double lo = Math.Max(dashPressTime, Math.Min(hi, loCandidate));
 
             return (lo, hi);
@@ -105,10 +104,6 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
         }
 
 
-        // TODO: Make not needing to take an action easier
-        // Examples:
-        // standing still should be no difficulty since it involves no inputs)
-        // not needing to dash should reduce difficulty because it removes two of the measured inputs (hopefully accounted for automatically when summation isn't uniformly weighted)
         public static double EvaluateDifficultyOf(DifficultyHitObject current)
         {
             var catchCurrent = (CatchDifficultyHitObject)current;
@@ -121,40 +116,42 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double difficulty = 0.0;
             for (double startPos = startPosLo; startPos < startPosHi; startPos += deltaStartPos)
             {
+                if (startPos >= catchCurrent.NormalizedX - 1.0 && startPos <= catchCurrent.NormalizedX + 1.0) continue;
                 double hyperMultiplier = calcHyperMult(catchCurrent, catchPrev, startPos);
+
                 var (walkPressLo, walkPressHi) = calcWalkPressRange(catchCurrent, catchPrev, hyperMultiplier, startPos);
                 double deltaWalkPress = (walkPressHi - walkPressLo) / walk_press_steps;
-                double difficultyWP = 0.0;
+                double inputVolumeWP = 0.0;
                 for (double walkPressTime = walkPressLo; walkPressTime < walkPressHi; walkPressTime += deltaWalkPress)
                 {
                     var (dashPressLo, dashPressHi) = calcDashPressRange(catchCurrent, catchPrev, hyperMultiplier, startPos, walkPressTime);
                     double deltaDashPress = (dashPressHi - dashPressLo) / dash_press_steps;
-                    double difficultyDP = 0.0;
+                    double inputVolumeDP = 0.0;
                     for (double dashPressTime = dashPressLo; dashPressTime < dashPressHi; dashPressTime += deltaDashPress)
                     {
                         var (dashReleaseLo, dashReleaseHi) = calcDashReleaseRange(catchCurrent, catchPrev, hyperMultiplier, startPos, walkPressTime, dashPressTime);
                         double deltaDashRelease = (dashReleaseHi - dashReleaseLo) / dash_release_steps;
-                        double difficultyDR = 0.0;
+                        double inputVolumeDR = 0.0;
                         for (double dashReleaseTime = dashReleaseLo; dashReleaseTime < dashReleaseHi; dashReleaseTime += deltaDashRelease)
                         {
                             var (walkReleaseLo, walkReleaseHi) = calcWalkReleaseRange(catchCurrent, catchPrev, hyperMultiplier, startPos, walkPressTime, dashPressTime, dashReleaseTime);
                             double deltaWalkRelease = (walkReleaseHi - walkReleaseLo) / walk_release_steps;
-                            double difficultyWR = 0.0;
+                            double inputVolumeWR = 0.0;
                             for (double walkReleaseTime = walkReleaseLo; walkReleaseTime < walkReleaseHi; walkReleaseTime += deltaWalkRelease)
                             {
-                                difficultyWR += (current.StartTime - walkReleaseTime) * deltaWalkRelease;
+                                inputVolumeWR += (catchCurrent.StartTime - walkReleaseTime) * deltaWalkRelease;
                             }
-                            difficultyDR += difficultyWR * deltaDashRelease;
+                            inputVolumeDR += inputVolumeWR * deltaDashRelease;
                         }
-                        difficultyDP += difficultyDR * deltaDashPress;
+                        inputVolumeDP += inputVolumeDR * deltaDashPress;
                     }
-                    difficultyWP += (walkPressTime - catchPrev.StartTime) * difficultyDP * deltaWalkPress;
+                    inputVolumeWP += (walkPressTime - catchPrev.StartTime) * inputVolumeDP * deltaWalkPress;
                 }
-                difficulty += difficultyWP * deltaStartPos;
+                // TODO: Choose a better function here
+                // Epistemic check, ask players if they feel per strain sorting is correct but exacerbated scaling
+                difficulty += 1.0 / Math.Log(1e-6 + 1.0 + inputVolumeWP * deltaStartPos);
             }
-            // TODO: Choose a better function here
-            // Epistemic check, ask players if they feel per strain sorting is correct but exacerbated scaling
-            return 1 / Math.Log(1.0 + difficulty);
+            return difficulty;
         }
     }
 }
