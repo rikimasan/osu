@@ -18,16 +18,14 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
         private const int dash_release_steps = 6;
         private const int walk_release_steps = 6;
 
-        private static double calcHyperMult(CatchDifficultyHitObject current, CatchDifficultyHitObject prev)
+        private static double calcHyperMult(CatchDifficultyHitObject current, CatchDifficultyHitObject prev, double startPos)
         {
+            if (!prev.BaseObject.HyperDash) return 1.0;
 
-            if (prev.BaseObject.HyperDash)
-            {
-                double dx = Math.Abs(current.BaseObject.EffectiveX - prev.BaseObject.EffectiveX);
-                double dt = Math.Max(1.0, current.DeltaTime - 1000.0 / 60.0);
-                return dx / dt;
-            }
-            return 1.0;
+            double dx = Math.Abs(current.NormalizedX - startPos);
+            double dt = Math.Max(1.0, current.DeltaTime - 1000.0 / 60.0);
+            double vReq = dx / dt;
+            return vReq / current.NormalizedDashSpeed;
         }
 
         // lo: previous start time
@@ -116,7 +114,6 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             var catchCurrent = (CatchDifficultyHitObject)current;
             var catchPrev = (CatchDifficultyHitObject)current.Previous(0);
 
-            double hyperMultiplier = calcHyperMult(catchCurrent, catchPrev);
 
             // TODO: Start and end position will need to be weighted non-uniformly later through backprop
             var (startPosLo, startPosHi) = (catchPrev.NormalizedX - 1.0, catchPrev.NormalizedX + 1.0);
@@ -124,6 +121,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double difficulty = 0.0;
             for (double startPos = startPosLo; startPos < startPosHi; startPos += deltaStartPos)
             {
+                double hyperMultiplier = calcHyperMult(catchCurrent, catchPrev, startPos);
                 var (walkPressLo, walkPressHi) = calcWalkPressRange(catchCurrent, catchPrev, hyperMultiplier, startPos);
                 double deltaWalkPress = (walkPressHi - walkPressLo) / walk_press_steps;
                 double difficultyWP = 0.0;
@@ -152,7 +150,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                     }
                     difficultyWP += walkPressTime * difficultyDP * deltaWalkPress;
                 }
-                difficulty += difficultyWP / deltaStartPos;
+                difficulty += difficultyWP * deltaStartPos;
             }
             // TODO: Choose a better function here
             // Epistemic check, ask players if they feel per strain sorting is correct but exacerbated scaling
