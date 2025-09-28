@@ -34,7 +34,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
         {
             double effectiveDashSpeed = hyperMultiplier * current.NormalizedDashSpeed;
 
-            double minTravelDistance = Math.Abs(current.NormalizedX - prev.NormalizedX) - 1.0;
+            double minTravelDistance = Math.Abs(current.NormalizedX - startPos) - 1.0;
             return (prev.StartTime, current.StartTime - (minTravelDistance / effectiveDashSpeed));
         }
 
@@ -148,7 +148,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                         }
                         difficultyDP += difficultyDR * deltaDashPress;
                     }
-                    difficultyWP += walkPressTime * difficultyDP * deltaWalkPress;
+                    difficultyWP += (walkPressTime - catchPrev.StartTime) * difficultyDP * deltaWalkPress;
                 }
                 difficulty += difficultyWP * deltaStartPos;
             }
