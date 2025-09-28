@@ -22,11 +22,10 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
         private static double calcHyperMult(CatchDifficultyHitObject current, CatchDifficultyHitObject prev, double startPos)
         {
             if (!prev.BaseObject.HyperDash) return 1.0;
-            // When hyperdash is true the following is guareteed to be greater than 1.0
             double dx = Math.Abs(current.NormalizedX - startPos);
             double dt = Math.Max(1.0, current.DeltaTime - 1000.0 / 60.0);
             double vReq = dx / dt;
-            return vReq / current.NormalizedDashSpeed;
+            return Math.Max(1.0, vReq / current.NormalizedDashSpeed);
         }
 
         // lo: previous start time
@@ -54,7 +53,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double maxDistanceTravel = Math.Abs(current.NormalizedX - startPos) + catcher_radius;
             double latestDashPressBeforeFarEdge = walkPressTime + maxDistanceTravel / effectiveWalkSpeed;
 
-            return (walkPressTime, Math.Min(Math.Min(current.StartTime, current.StartTime - minDashTime), latestDashPressBeforeFarEdge));
+            return (walkPressTime, Math.Min(current.StartTime - minDashTime, latestDashPressBeforeFarEdge));
         }
 
         // lo: if we're going to walk the rest of the way, what's the least dash time that still lets you walk within 1 radius of current
