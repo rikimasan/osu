@@ -12,11 +12,12 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
     {
         // TODO: Tune these params later, 5x nested integral is a bit expensive xd
         // Thinking that I'll build slow and accurate now and performance can happen from an estimator trained off the accurate model
-        private const int start_pos_steps = 6;
-        private const int walk_press_steps = 6;
-        private const int dash_press_steps = 6;
-        private const int dash_release_steps = 6;
-        private const int walk_release_steps = 6;
+        private const int start_pos_steps = 5;
+        private const int walk_press_steps = 5;
+        private const int dash_press_steps = 5;
+        private const int dash_release_steps = 5;
+        private const int walk_release_steps = 5;
+        private const double catcher_radius = 1.0;
 
         private static double calcHyperMult(CatchDifficultyHitObject current, CatchDifficultyHitObject prev, double startPos)
         {
@@ -34,23 +35,23 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
         {
             double effectiveDashSpeed = hyperMultiplier * current.NormalizedDashSpeed;
 
-            double minTravelDistance = Math.Abs(current.NormalizedX - startPos) - 1.0;
+            double minTravelDistance = Math.Abs(current.NormalizedX - startPos) - catcher_radius;
             return (prev.StartTime, current.StartTime - (minTravelDistance / effectiveDashSpeed));
         }
 
         // lo: you can't dash before you've started walking
         // hi: what is minimum amount of time spent dashing needed, subtract from current.StartTime
-        private static (double lo, double hi) calcDashPressRange(CatchDifficultyHitObject current, CatchDifficultyHitObject prev, double hyperMultiplier, double startPos, double walkPressTime)
+        private static (double lo, double hi) calcDashPressRange(CatchDifficultyHitObject current, double hyperMultiplier, double startPos, double walkPressTime)
         {
             double effectiveWalkSpeed = hyperMultiplier * current.NormalizedWalkSpeed;
             double effectiveDashSpeed = hyperMultiplier * current.NormalizedDashSpeed;
 
-            double minDistanceTravel = Math.Abs(current.NormalizedX - prev.NormalizedX) - 1.0;
+            double minTravelDistance = Math.Abs(current.NormalizedX - startPos) - catcher_radius;
             double maxWalkDistance = effectiveWalkSpeed * (current.StartTime - walkPressTime);
-            double extraDistance = Math.Max(0.0, minDistanceTravel - maxWalkDistance);
+            double extraDistance = Math.Max(0.0, minTravelDistance - maxWalkDistance);
             double minDashTime = extraDistance / (effectiveDashSpeed - effectiveWalkSpeed);
             // bound above to not walk past far edge
-            double maxDistanceTravel = Math.Abs(current.NormalizedX - startPos) + 1.0;
+            double maxDistanceTravel = Math.Abs(current.NormalizedX - startPos) + catcher_radius;
             double latestDashPressBeforeFarEdge = walkPressTime + maxDistanceTravel / effectiveWalkSpeed;
 
             return (walkPressTime, Math.Min(Math.Min(current.StartTime, current.StartTime - minDashTime), latestDashPressBeforeFarEdge));
@@ -58,9 +59,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
 
         // lo: if we're going to walk the rest of the way, what's the least dash time that still lets you walk within 1 radius of current
         // hi: reach the far edge
-        private static (double lo, double hi) calcDashReleaseRange(CatchDifficultyHitObject current, CatchDifficultyHitObject prev, double hyperMultiplier, double startPos, double walkPressTime, double dashPressTime)
+        private static (double lo, double hi) calcDashReleaseRange(CatchDifficultyHitObject current, double hyperMultiplier, double startPos, double walkPressTime, double dashPressTime)
         {
-            double sign = Math.Sign(current.NormalizedX - prev.NormalizedX);
+            double sign = Math.Sign(current.NormalizedX - startPos);
             double effectiveWalkSpeed = hyperMultiplier * current.NormalizedWalkSpeed;
             double effectiveDashSpeed = hyperMultiplier * current.NormalizedDashSpeed;
 
@@ -68,12 +69,12 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double currentPos = startPos + sign * preDashDistanceWalked;
 
             // Upper bound
-            double maxDistanceTravel = Math.Abs(current.NormalizedX - currentPos) + 1.0;
+            double maxDistanceTravel = Math.Abs(current.NormalizedX - currentPos) + catcher_radius;
             double maxDashDuration = maxDistanceTravel / effectiveDashSpeed;
             double hi = Math.Min(current.StartTime, dashPressTime + maxDashDuration);
 
             // Lower bound
-            double closeDistanceFromStart = Math.Abs(current.NormalizedX - startPos) - 1.0;
+            double closeDistanceFromStart = Math.Abs(current.NormalizedX - startPos) - catcher_radius;
             double walkOnlyDistance = effectiveWalkSpeed * (current.StartTime - walkPressTime);
             double extraNeeded = Math.Max(0.0, closeDistanceFromStart - walkOnlyDistance);
             double minDashDuration = extraNeeded / (effectiveDashSpeed - effectiveWalkSpeed);
@@ -86,17 +87,17 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
 
         // lo: minimum to walk rest to the close edge
         // hi: reach the far edge and ensure excess time >= 0
-        private static (double lo, double hi) calcWalkReleaseRange(CatchDifficultyHitObject current, CatchDifficultyHitObject prev, double hyperMultiplier, double startPos, double walkPressTime, double dashPressTime, double dashReleaseTime)
+        private static (double lo, double hi) calcWalkReleaseRange(CatchDifficultyHitObject current, double hyperMultiplier, double startPos, double walkPressTime, double dashPressTime, double dashReleaseTime)
         {
-            double sign = Math.Sign(current.NormalizedX - prev.NormalizedX);
+            double sign = Math.Sign(current.NormalizedX - startPos);
             double effectiveWalkSpeed = hyperMultiplier * current.NormalizedWalkSpeed;
             double effectiveDashSpeed = hyperMultiplier * current.NormalizedDashSpeed;
 
             double preDashDistanceWalked = effectiveWalkSpeed * (dashPressTime - walkPressTime);
             double dashedDistance = effectiveDashSpeed * (dashReleaseTime - dashPressTime);
             double currentPos = startPos + sign * (preDashDistanceWalked + dashedDistance);
-            double minDistanceTravel = Math.Abs(current.NormalizedX - currentPos) - 1.0;
-            double maxDistanceTravel = Math.Abs(current.NormalizedX - currentPos) + 1.0;
+            double minDistanceTravel = Math.Abs(current.NormalizedX - currentPos) - catcher_radius;
+            double maxDistanceTravel = Math.Abs(current.NormalizedX - currentPos) + catcher_radius;
             double minTimeNeeded = minDistanceTravel / effectiveWalkSpeed;
             double maxTimeNeeded = maxDistanceTravel / effectiveWalkSpeed;
 
@@ -108,15 +109,15 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
         {
             var catchCurrent = (CatchDifficultyHitObject)current;
             var catchPrev = (CatchDifficultyHitObject)current.Previous(0);
-
+            if (catchPrev == null) return 0.0;
 
             // TODO: Start and end position will need to be weighted non-uniformly later through backprop
-            var (startPosLo, startPosHi) = (catchPrev.NormalizedX - 1.0, catchPrev.NormalizedX + 1.0);
+            var (startPosLo, startPosHi) = (catchPrev.NormalizedX - catcher_radius, catchPrev.NormalizedX + catcher_radius);
             double deltaStartPos = 2.0 / start_pos_steps;
             double difficulty = 0.0;
             for (double startPos = startPosLo; startPos < startPosHi; startPos += deltaStartPos)
             {
-                if (startPos >= catchCurrent.NormalizedX - 1.0 && startPos <= catchCurrent.NormalizedX + 1.0) continue;
+                if (startPos >= catchCurrent.NormalizedX - catcher_radius && startPos <= catchCurrent.NormalizedX + catcher_radius) continue;
                 double hyperMultiplier = calcHyperMult(catchCurrent, catchPrev, startPos);
 
                 var (walkPressLo, walkPressHi) = calcWalkPressRange(catchCurrent, catchPrev, hyperMultiplier, startPos);
@@ -124,17 +125,17 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 double inputVolumeWP = 0.0;
                 for (double walkPressTime = walkPressLo; walkPressTime < walkPressHi; walkPressTime += deltaWalkPress)
                 {
-                    var (dashPressLo, dashPressHi) = calcDashPressRange(catchCurrent, catchPrev, hyperMultiplier, startPos, walkPressTime);
+                    var (dashPressLo, dashPressHi) = calcDashPressRange(catchCurrent, hyperMultiplier, startPos, walkPressTime);
                     double deltaDashPress = (dashPressHi - dashPressLo) / dash_press_steps;
                     double inputVolumeDP = 0.0;
                     for (double dashPressTime = dashPressLo; dashPressTime < dashPressHi; dashPressTime += deltaDashPress)
                     {
-                        var (dashReleaseLo, dashReleaseHi) = calcDashReleaseRange(catchCurrent, catchPrev, hyperMultiplier, startPos, walkPressTime, dashPressTime);
+                        var (dashReleaseLo, dashReleaseHi) = calcDashReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime);
                         double deltaDashRelease = (dashReleaseHi - dashReleaseLo) / dash_release_steps;
                         double inputVolumeDR = 0.0;
                         for (double dashReleaseTime = dashReleaseLo; dashReleaseTime < dashReleaseHi; dashReleaseTime += deltaDashRelease)
                         {
-                            var (walkReleaseLo, walkReleaseHi) = calcWalkReleaseRange(catchCurrent, catchPrev, hyperMultiplier, startPos, walkPressTime, dashPressTime, dashReleaseTime);
+                            var (walkReleaseLo, walkReleaseHi) = calcWalkReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime, dashReleaseTime);
                             double deltaWalkRelease = (walkReleaseHi - walkReleaseLo) / walk_release_steps;
                             double inputVolumeWR = 0.0;
                             for (double walkReleaseTime = walkReleaseLo; walkReleaseTime < walkReleaseHi; walkReleaseTime += deltaWalkRelease)
