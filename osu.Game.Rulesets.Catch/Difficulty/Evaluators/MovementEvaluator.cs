@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Generic;
 using osu.Game.Rulesets.Catch.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Catch.UI;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
@@ -18,6 +19,18 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
         private const int dash_release_steps = 5;
         private const int walk_release_steps = 5;
         private const double catcher_radius = 1.0;
+
+        private static IEnumerable<double> linspace(double lo, double hi, int samples)
+        {
+            if (!double.IsFinite(lo) || !double.IsFinite(hi) || samples <= 0) yield break;
+
+            double span = hi - lo;
+            if (span <= 0) yield break;
+
+            double inv = 1.0 / samples;
+            for (int i = 0; i < samples; i++)
+                yield return lo + (i + 0.5) * span * inv;
+        }
 
         private static double calcHyperMult(CatchDifficultyHitObject current, CatchDifficultyHitObject prev, double startPos)
         {
@@ -122,22 +135,22 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 var (walkPressLo, walkPressHi) = calcWalkPressRange(catchCurrent, catchPrev, hyperMultiplier, startPos);
                 double deltaWalkPress = (walkPressHi - walkPressLo) / walk_press_steps;
                 double inputVolumeWP = 0.0;
-                for (double walkPressTime = walkPressLo; walkPressTime < walkPressHi; walkPressTime += deltaWalkPress)
+                foreach (double walkPressTime in linspace(walkPressLo, walkPressHi, walk_press_steps))
                 {
                     var (dashPressLo, dashPressHi) = calcDashPressRange(catchCurrent, hyperMultiplier, startPos, walkPressTime);
                     double deltaDashPress = (dashPressHi - dashPressLo) / dash_press_steps;
                     double inputVolumeDP = 0.0;
-                    for (double dashPressTime = dashPressLo; dashPressTime < dashPressHi; dashPressTime += deltaDashPress)
+                    foreach (double dashPressTime in linspace(dashPressLo, dashPressHi, dash_press_steps))
                     {
                         var (dashReleaseLo, dashReleaseHi) = calcDashReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime);
                         double deltaDashRelease = (dashReleaseHi - dashReleaseLo) / dash_release_steps;
                         double inputVolumeDR = 0.0;
-                        for (double dashReleaseTime = dashReleaseLo; dashReleaseTime < dashReleaseHi; dashReleaseTime += deltaDashRelease)
+                        foreach (double dashReleaseTime in linspace(dashReleaseLo, dashReleaseHi, dash_release_steps))
                         {
                             var (walkReleaseLo, walkReleaseHi) = calcWalkReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime, dashReleaseTime);
                             double deltaWalkRelease = (walkReleaseHi - walkReleaseLo) / walk_release_steps;
                             double inputVolumeWR = 0.0;
-                            for (double walkReleaseTime = walkReleaseLo; walkReleaseTime < walkReleaseHi; walkReleaseTime += deltaWalkRelease)
+                            foreach (double walkReleaseTime in linspace(walkReleaseLo, walkReleaseHi, walk_release_steps))
                             {
                                 inputVolumeWR += (catchCurrent.StartTime - walkReleaseTime) * deltaWalkRelease;
                             }
