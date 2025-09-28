@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using osu.Game.Rulesets.Catch.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Catch.UI;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
@@ -13,7 +14,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
     {
         // TODO: Tune these params later, 5x nested integral is a bit expensive xd
         // Thinking that I'll build slow and accurate now and performance can happen from an estimator trained off the accurate model
-        private const int start_pos_steps = 5;
+        private const int start_pos_steps = 10;
         private const int walk_press_steps = 5;
         private const int dash_press_steps = 5;
         private const int dash_release_steps = 5;
@@ -126,7 +127,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             // TODO: Start and end position will need to be weighted non-uniformly later through backprop
             var (startPosLo, startPosHi) = (catchPrev.NormalizedX - catcher_radius, catchPrev.NormalizedX + catcher_radius);
             double deltaStartPos = 2.0 / start_pos_steps;
-            double difficulty = 0.0;
+            List<double> difficulty = new List<double>();
             for (double startPos = startPosLo; startPos < startPosHi; startPos += deltaStartPos)
             {
                 if (startPos >= catchCurrent.NormalizedX - catcher_radius && startPos <= catchCurrent.NormalizedX + catcher_radius) continue;
@@ -142,6 +143,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                     double inputVolumeDP = 0.0;
                     foreach (double dashPressTime in linspace(dashPressLo, dashPressHi, dash_press_steps))
                     {
+                        // TODO: make it so if you don't have to release it doesn't add difficulty for the release timing
                         var (dashReleaseLo, dashReleaseHi) = calcDashReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime);
                         double deltaDashRelease = (dashReleaseHi - dashReleaseLo) / dash_release_steps;
                         double inputVolumeDR = 0.0;
@@ -162,9 +164,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 }
                 // TODO: Choose a better function here
                 // Epistemic check, ask players if they feel per strain sorting is correct but exacerbated scaling
-                difficulty += 1.0 / Math.Log(1e-6 + 1.0 + inputVolumeWP * deltaStartPos);
+                difficulty.Add(1.0 / Math.Log(1e-6 + 1.0 + inputVolumeWP * deltaStartPos));
             }
-            return difficulty;
+            return difficulty.Count > 0 ? difficulty.Min() : 0.0;
         }
     }
 }

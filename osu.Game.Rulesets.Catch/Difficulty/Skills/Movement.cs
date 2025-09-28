@@ -15,7 +15,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Skills
 
         protected override double DecayWeight => 0.94;
 
-        protected override int SectionLength => 750;
+        protected override int SectionLength => 400;
 
         public Movement(Mod[] mods, float halfCatcherWidth, double clockRate) : base(mods) { }
 
