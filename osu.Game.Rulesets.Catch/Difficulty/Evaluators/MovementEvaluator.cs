@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using osu.Game.Rulesets.Catch.Difficulty.Preprocessing;
-using osu.Game.Rulesets.Catch.UI;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
 
 namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
@@ -14,17 +13,15 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
     {
         // TODO: Tune these params later, 5x nested integral is a bit expensive xd
         // Thinking that I'll build slow and accurate now and performance can happen from an estimator trained off the accurate model
-        private const int start_pos_steps = 10;
-        private const int walk_press_steps = 5;
-        private const int dash_press_steps = 5;
-        private const int dash_release_steps = 5;
-        private const int walk_release_steps = 5;
+        private const int start_pos_steps = 12;
+        private const int walk_press_steps = 6;
+        private const int dash_press_steps = 6;
+        private const int dash_release_steps = 4;
+        private const int walk_release_steps = 4;
         private const double catcher_radius = 1.0;
 
         private static IEnumerable<double> linspace(double lo, double hi, int samples)
         {
-            if (!double.IsFinite(lo) || !double.IsFinite(hi) || samples <= 0) yield break;
-
             double span = hi - lo;
             if (span <= 0) yield break;
 
@@ -130,7 +127,11 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             List<double> difficulty = new List<double>();
             for (double startPos = startPosLo; startPos < startPosHi; startPos += deltaStartPos)
             {
-                if (startPos >= catchCurrent.NormalizedX - catcher_radius && startPos <= catchCurrent.NormalizedX + catcher_radius) continue;
+                if (startPos >= catchCurrent.NormalizedX - catcher_radius && startPos <= catchCurrent.NormalizedX + catcher_radius)
+                {
+                    difficulty.Add(0.0);
+                    continue;
+                }
                 double hyperMultiplier = calcHyperMult(catchCurrent, catchPrev, startPos);
 
                 var (walkPressLo, walkPressHi) = calcWalkPressRange(catchCurrent, catchPrev, hyperMultiplier, startPos);
@@ -166,7 +167,8 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 // Epistemic check, ask players if they feel per strain sorting is correct but exacerbated scaling
                 difficulty.Add(1.0 / Math.Log(1e-6 + 1.0 + inputVolumeWP * deltaStartPos));
             }
-            return difficulty.Count > 0 ? difficulty.Min() : 0.0;
+            // Temporary fix for cheesable back and forths until I do backprop
+            return difficulty.Min();
         }
     }
 }
