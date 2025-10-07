@@ -11,23 +11,26 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
 {
     public static class MovementEvaluator
     {
-        // TODO: Tune these params later, 5x nested integral is a bit expensive xd
+        private const double eps = 1e-9;
+        // TODO: Tune these params later, 4x nested integral is a bit expensive xd
         // Thinking that I'll build slow and accurate now and performance can happen from an estimator trained off the accurate model
-        private const int start_pos_steps = 12;
-        private const int walk_press_steps = 6;
-        private const int dash_press_steps = 6;
-        private const int dash_release_steps = 4;
-        private const int walk_release_steps = 4;
+        private const int start_pos_steps = 8;
+        private const int walk_press_steps = 8;
+        private const int dash_press_steps = 8;
+        private const int dash_release_steps = 8;
         private const double catcher_radius = 1.0;
 
         private static IEnumerable<double> linspace(double lo, double hi, int samples)
         {
-            double span = hi - lo;
-            if (span <= 0) yield break;
+            double a = Math.Min(lo, hi);
+            double b = Math.Max(lo, hi);
 
-            double inv = 1.0 / samples;
+            if (samples <= 2) { yield return a; yield return b; yield break; }
+
+            double step = (b - a) / (samples - 1);
+
             for (int i = 0; i < samples; i++)
-                yield return lo + (i + 0.5) * span * inv;
+                yield return a + i * step;
         }
 
         private static double calcHyperMult(CatchDifficultyHitObject current, CatchDifficultyHitObject prev, double startPos)
@@ -119,13 +122,14 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
         {
             var catchCurrent = (CatchDifficultyHitObject)current;
             var catchPrev = (CatchDifficultyHitObject)current.Previous(0);
+            var catchNext = (CatchDifficultyHitObject)current.Next(0);
             if (catchPrev == null) return 0.0;
-
-            // TODO: Start and end position will need to be weighted non-uniformly later through backprop
+            if (catchNext == null) return 0.0;
+            // TODO: Propagate start positions and key press passthrough across notes to minimize total difficulty
+            // TODO: Non-uniform weighting across each distribution
             var (startPosLo, startPosHi) = (catchPrev.NormalizedX - catcher_radius, catchPrev.NormalizedX + catcher_radius);
-            double deltaStartPos = 2.0 / start_pos_steps;
             List<double> difficulty = new List<double>();
-            for (double startPos = startPosLo; startPos < startPosHi; startPos += deltaStartPos)
+            foreach (double startPos in linspace(startPosLo, startPosHi, start_pos_steps))
             {
                 if (startPos >= catchCurrent.NormalizedX - catcher_radius && startPos <= catchCurrent.NormalizedX + catcher_radius)
                 {
@@ -135,40 +139,44 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 double hyperMultiplier = calcHyperMult(catchCurrent, catchPrev, startPos);
 
                 var (walkPressLo, walkPressHi) = calcWalkPressRange(catchCurrent, catchPrev, hyperMultiplier, startPos);
-                double deltaWalkPress = (walkPressHi - walkPressLo) / walk_press_steps;
-                double inputVolumeWP = 0.0;
+                double walkPressRange = Math.Abs(walkPressHi - walkPressLo);
+                List<double> inputVolumeWP = new List<double>();
                 foreach (double walkPressTime in linspace(walkPressLo, walkPressHi, walk_press_steps))
                 {
                     var (dashPressLo, dashPressHi) = calcDashPressRange(catchCurrent, hyperMultiplier, startPos, walkPressTime);
-                    double deltaDashPress = (dashPressHi - dashPressLo) / dash_press_steps;
-                    double inputVolumeDP = 0.0;
+                    double dashPressRange = Math.Abs(dashPressHi - dashPressLo);
+                    List<double> inputVolumeDP = new List<double>();
                     foreach (double dashPressTime in linspace(dashPressLo, dashPressHi, dash_press_steps))
                     {
-                        // TODO: make it so if you don't have to release it doesn't add difficulty for the release timing
                         var (dashReleaseLo, dashReleaseHi) = calcDashReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime);
-                        double deltaDashRelease = (dashReleaseHi - dashReleaseLo) / dash_release_steps;
-                        double inputVolumeDR = 0.0;
+                        double dashReleaseRange = Math.Abs(dashReleaseHi - dashReleaseLo);
+                        if (dashReleaseHi == catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
+                        {
+                            // TODO: This should also propagagte into the press timing of the next note
+                            inputVolumeDP.Add(0.0);
+                            continue;
+                        }
+                        List<double> inputVolumeDR = new List<double>();
                         foreach (double dashReleaseTime in linspace(dashReleaseLo, dashReleaseHi, dash_release_steps))
                         {
                             var (walkReleaseLo, walkReleaseHi) = calcWalkReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime, dashReleaseTime);
-                            double deltaWalkRelease = (walkReleaseHi - walkReleaseLo) / walk_release_steps;
-                            double inputVolumeWR = 0.0;
-                            foreach (double walkReleaseTime in linspace(walkReleaseLo, walkReleaseHi, walk_release_steps))
+                            double walkReleaseRange = Math.Abs(walkReleaseHi - walkReleaseLo);
+                            if (walkReleaseHi == catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
                             {
-                                inputVolumeWR += (catchCurrent.StartTime - walkReleaseTime) * deltaWalkRelease;
+                                // TODO: This should also propagagte into the press timing of the next note
+                                inputVolumeDR.Add(0.0);
+                                continue;
                             }
-                            inputVolumeDR += inputVolumeWR * deltaDashRelease;
+                            inputVolumeDR.Add(Math.Log(1.0 - (1.0 / (eps + 1.0 + walkReleaseRange))));
                         }
-                        inputVolumeDP += inputVolumeDR * deltaDashPress;
+                        inputVolumeDP.Add(Math.Log(1.0 - (1.0 / (eps + 1.0 + dashReleaseRange))) + inputVolumeDR.Max());
                     }
-                    inputVolumeWP += (walkPressTime - catchPrev.StartTime) * inputVolumeDP * deltaWalkPress;
+                    inputVolumeWP.Add(Math.Log(1.0 - (1.0 / (eps + 1.0 + dashPressRange))) + inputVolumeDP.Max());
                 }
-                // TODO: Choose a better function here
-                // Epistemic check, ask players if they feel per strain sorting is correct but exacerbated scaling
-                difficulty.Add(1.0 / Math.Log(1e-6 + 1.0 + inputVolumeWP * deltaStartPos));
+                difficulty.Add(Math.Log(1.0 - (1.0 / (eps + 1.0 + walkPressRange))) + inputVolumeWP.Max());
             }
-            // Temporary fix for cheesable back and forths until I do backprop
-            return difficulty.Min();
+            // Using Max as a temporary fix for cheesable back and forths until I do backprop
+            return Math.Log(0.5) / Math.Log(1.0 - Math.Exp(difficulty.Max()));
         }
     }
 }
