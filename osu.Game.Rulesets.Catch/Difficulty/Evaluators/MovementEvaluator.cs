@@ -111,10 +111,10 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double currentPos = startPos + sign * (preDashDistanceWalked + dashedDistance);
             double minDistanceTravel = Math.Abs(current.NormalizedX - currentPos) - catcher_radius;
             double maxDistanceTravel = Math.Abs(current.NormalizedX - currentPos) + catcher_radius;
-            double minTimeNeeded = minDistanceTravel / effectiveWalkSpeed;
+            double minTimeNeeded = minDistanceTravel / effectiveWalkSpeed; // can be negative if we're already in radius
             double maxTimeNeeded = maxDistanceTravel / effectiveWalkSpeed;
 
-            return (dashReleaseTime + minTimeNeeded, Math.Min(current.StartTime, dashReleaseTime + maxTimeNeeded));
+            return (Math.Max(dashReleaseTime, dashReleaseTime + minTimeNeeded), Math.Min(current.StartTime, dashReleaseTime + maxTimeNeeded));
         }
 
 
@@ -176,7 +176,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 difficulty.Add(Math.Log(1.0 - (1.0 / (eps + 1.0 + walkPressRange))) + inputVolumeWP.Max());
             }
             // Using Max as a temporary fix for cheesable back and forths until I do backprop
-            return Math.Log(0.92) / Math.Log(1.0 - Math.Exp(difficulty.Max()));
+            return Math.Log(0.923) / Math.Log(1.0 - Math.Exp(difficulty.Max()));
         }
     }
 }
