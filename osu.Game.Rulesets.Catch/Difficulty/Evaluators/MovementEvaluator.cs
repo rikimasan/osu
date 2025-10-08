@@ -85,12 +85,12 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double currentPosAtDashPress = startPos + sign * preDashDistanceWalked;
 
             // Upper bound
-            double maxDistanceTravel = Math.Abs(current.NormalizedX - currentPosAtDashPress) + catcher_radius;
+            double maxDistanceTravel = sign * (current.NormalizedX - currentPosAtDashPress) + catcher_radius;
             double maxDashDuration = maxDistanceTravel / effectiveDashSpeed;
             double hi = Math.Min(current.StartTime, dashPressTime + maxDashDuration);
 
             // Lower bound
-            double remainingDistanceFromDashPress = Math.Max(0.0, Math.Abs(current.NormalizedX - currentPosAtDashPress) - catcher_radius);
+            double remainingDistanceFromDashPress = Math.Max(0.0, sign * (current.NormalizedX - currentPosAtDashPress) - catcher_radius);
             double walkCapacityFromDashPress = effectiveWalkSpeed * (current.StartTime - dashPressTime);
             double extraNeededAfterDashPress = Math.Max(0.0, remainingDistanceFromDashPress - walkCapacityFromDashPress);
             double minDashDuration = extraNeededAfterDashPress / (effectiveDashSpeed - effectiveWalkSpeed);
@@ -112,9 +112,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double preDashDistanceWalked = effectiveWalkSpeed * (dashPressTime - walkPressTime);
             double dashedDistance = effectiveDashSpeed * (dashReleaseTime - dashPressTime);
             double currentPos = startPos + sign * (preDashDistanceWalked + dashedDistance);
-            double minDistanceTravel = Math.Abs(current.NormalizedX - currentPos) - catcher_radius;
-            double maxDistanceTravel = Math.Abs(current.NormalizedX - currentPos) + catcher_radius;
-            double minTimeNeeded = minDistanceTravel / effectiveWalkSpeed; // can be negative if we're already in radius
+            double minDistanceTravel = Math.Max(0.0, sign * (current.NormalizedX - currentPos) - catcher_radius);
+            double maxDistanceTravel = sign * (current.NormalizedX - currentPos) + catcher_radius;
+            double minTimeNeeded = minDistanceTravel / effectiveWalkSpeed;
             double maxTimeNeeded = maxDistanceTravel / effectiveWalkSpeed;
             double lo = Math.Max(dashReleaseTime, dashReleaseTime + minTimeNeeded);
             double hi = Math.Min(current.StartTime, dashReleaseTime + maxTimeNeeded);
@@ -144,7 +144,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 double hyperMultiplier = calcHyperMult(catchCurrent, catchPrev, startPos);
                 var (walkPressLo, walkPressHi) = calcWalkPressRange(catchCurrent, catchPrev, hyperMultiplier, startPos);
                 double walkPressRange = walkPressHi - walkPressLo;
-                if (walkPressRange <= 0) continue; // impossible starting position so we skip (need to verify this should actually be possible)
+                if (walkPressRange <= 0) continue; // impossible starting position so we skip (need to verify this should actually happen)
                 List<double> logProbabilitiesDP = new List<double>();
                 foreach (double walkPressTime in linspace(walkPressLo, walkPressHi, walk_press_steps))
                 {
