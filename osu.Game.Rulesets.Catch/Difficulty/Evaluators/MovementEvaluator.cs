@@ -48,7 +48,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
         {
             double effectiveDashSpeed = hyperMultiplier * current.NormalizedDashSpeed;
 
-            double minTravelDistance = Math.Abs(current.NormalizedX - startPos) - catcher_radius;
+            double minTravelDistance = Math.Max(0.0, Math.Abs(current.NormalizedX - startPos) - catcher_radius);
             return (prev.StartTime, current.StartTime - (minTravelDistance / effectiveDashSpeed));
         }
 
@@ -128,55 +128,61 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             // TODO: Propagate start positions and key press passthrough across notes to minimize total difficulty
             // TODO: Non-uniform weighting across each distribution
             var (startPosLo, startPosHi) = (catchPrev.NormalizedX - catcher_radius, catchPrev.NormalizedX + catcher_radius);
-            List<double> difficulty = new List<double>();
+            List<double> logProbabilitiesWP = new List<double>();
             foreach (double startPos in linspace(startPosLo, startPosHi, start_pos_steps))
             {
                 if (startPos >= catchCurrent.NormalizedX - catcher_radius && startPos <= catchCurrent.NormalizedX + catcher_radius)
                 {
-                    difficulty.Add(0.0);
+                    logProbabilitiesWP.Add(0.0);
                     continue;
                 }
                 double hyperMultiplier = calcHyperMult(catchCurrent, catchPrev, startPos);
 
                 var (walkPressLo, walkPressHi) = calcWalkPressRange(catchCurrent, catchPrev, hyperMultiplier, startPos);
-                double walkPressRange = Math.Abs(walkPressHi - walkPressLo);
-                List<double> inputVolumeWP = new List<double>();
+                if (walkPressHi + eps < walkPressLo) throw new ArgumentException("walkPressHi should always be greater than or equal to walkPressLo");
+                double walkPressRange = walkPressHi - walkPressLo;
+                List<double> logProbabilitiesDP = new List<double>();
                 foreach (double walkPressTime in linspace(walkPressLo, walkPressHi, walk_press_steps))
                 {
                     var (dashPressLo, dashPressHi) = calcDashPressRange(catchCurrent, hyperMultiplier, startPos, walkPressTime);
+                    if (dashPressHi + eps < dashPressLo) throw new ArgumentException("dashPressHi should always be greater than or equal to dashPressLo");
                     double dashPressRange = Math.Abs(dashPressHi - dashPressLo);
-                    List<double> inputVolumeDP = new List<double>();
+                    List<double> logProbabilitiesDR = new List<double>();
                     foreach (double dashPressTime in linspace(dashPressLo, dashPressHi, dash_press_steps))
                     {
                         var (dashReleaseLo, dashReleaseHi) = calcDashReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime);
+                        if (dashReleaseHi + eps < dashReleaseLo) throw new ArgumentException("dashReleaseHi should always be greater than or equal to dashReleaseLo");
                         double dashReleaseRange = Math.Abs(dashReleaseHi - dashReleaseLo);
-                        if (dashReleaseHi == catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
+                        // if you're holding dash through to the next note then there is no release timing
+                        if (dashReleaseHi + eps >= catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
                         {
                             // TODO: This should also propagagte into the press timing of the next note
-                            inputVolumeDP.Add(0.0);
+                            logProbabilitiesDR.Add(0.0);
                             continue;
                         }
-                        List<double> inputVolumeDR = new List<double>();
+                        List<double> logProbabilitiesWR = new List<double>();
                         foreach (double dashReleaseTime in linspace(dashReleaseLo, dashReleaseHi, dash_release_steps))
                         {
                             var (walkReleaseLo, walkReleaseHi) = calcWalkReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime, dashReleaseTime);
+                            if (walkReleaseHi + eps < walkReleaseLo) throw new ArgumentException("walkReleaseHi should always be greater than or equal to walkReleaseLo");
                             double walkReleaseRange = Math.Abs(walkReleaseHi - walkReleaseLo);
-                            if (walkReleaseHi == catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
+                            // if you're holding walk through to the next note then there is no release timing
+                            if (walkReleaseHi + eps >= catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
                             {
                                 // TODO: This should also propagagte into the press timing of the next note
-                                inputVolumeDR.Add(0.0);
+                                logProbabilitiesWR.Add(0.0);
                                 continue;
                             }
-                            inputVolumeDR.Add(Math.Log(1.0 - (1.0 / (eps + 1.0 + walkReleaseRange))));
+                            logProbabilitiesWR.Add(Math.Log(1.0 - (1.0 / (eps + 1.0 + walkReleaseRange))));
                         }
-                        inputVolumeDP.Add(Math.Log(1.0 - (1.0 / (eps + 1.0 + dashReleaseRange))) + inputVolumeDR.Max());
+                        logProbabilitiesDR.Add(Math.Log(1.0 - (1.0 / (eps + 1.0 + dashReleaseRange))) + logProbabilitiesWR.Max());
                     }
-                    inputVolumeWP.Add(Math.Log(1.0 - (1.0 / (eps + 1.0 + dashPressRange))) + inputVolumeDP.Max());
+                    logProbabilitiesDP.Add(Math.Log(1.0 - (1.0 / (eps + 1.0 + dashPressRange))) + logProbabilitiesDR.Max());
                 }
-                difficulty.Add(Math.Log(1.0 - (1.0 / (eps + 1.0 + walkPressRange))) + inputVolumeWP.Max());
+                logProbabilitiesWP.Add(Math.Log(1.0 - (1.0 / (eps + 1.0 + walkPressRange))) + logProbabilitiesDP.Max());
             }
             // Using Max as a temporary fix for cheesable back and forths until I do backprop
-            return Math.Log(0.923) / Math.Log(1.0 - Math.Exp(difficulty.Max()));
+            return Math.Log(0.923) / Math.Log(1.0 - Math.Exp(logProbabilitiesWP.Max()));
         }
     }
 }
