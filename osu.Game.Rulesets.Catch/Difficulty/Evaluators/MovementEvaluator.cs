@@ -67,7 +67,10 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double maxDistanceTravel = Math.Abs(current.NormalizedX - startPos) + catcher_radius;
             double latestDashPressBeforeFarEdge = walkPressTime + maxDistanceTravel / effectiveWalkSpeed;
 
-            return (walkPressTime, Math.Min(current.StartTime - minDashTime, latestDashPressBeforeFarEdge));
+            double lo = walkPressTime;
+            double hi = Math.Min(current.StartTime - minDashTime, latestDashPressBeforeFarEdge);
+            if (hi + eps < lo) throw new ArgumentException("dashPressHi should always be greater than or equal to dashPressLo");
+            return (lo, hi);
         }
 
         // lo: if we're going to walk the rest of the way, what's the least dash time that still lets you walk within 1 radius of current
@@ -79,22 +82,22 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double effectiveDashSpeed = hyperMultiplier * current.NormalizedDashSpeed;
 
             double preDashDistanceWalked = effectiveWalkSpeed * (dashPressTime - walkPressTime);
-            double currentPos = startPos + sign * preDashDistanceWalked;
+            double currentPosAtDashPress = startPos + sign * preDashDistanceWalked;
 
             // Upper bound
-            double maxDistanceTravel = Math.Abs(current.NormalizedX - currentPos) + catcher_radius;
+            double maxDistanceTravel = Math.Abs(current.NormalizedX - currentPosAtDashPress) + catcher_radius;
             double maxDashDuration = maxDistanceTravel / effectiveDashSpeed;
             double hi = Math.Min(current.StartTime, dashPressTime + maxDashDuration);
 
             // Lower bound
-            double closeDistanceFromStart = Math.Abs(current.NormalizedX - startPos) - catcher_radius;
-            double walkOnlyDistance = effectiveWalkSpeed * (current.StartTime - walkPressTime);
-            double extraNeeded = Math.Max(0.0, closeDistanceFromStart - walkOnlyDistance);
-            double minDashDuration = extraNeeded / (effectiveDashSpeed - effectiveWalkSpeed);
+            double remainingDistanceFromDashPress = Math.Max(0.0, Math.Abs(current.NormalizedX - currentPosAtDashPress) - catcher_radius);
+            double walkCapacityFromDashPress = effectiveWalkSpeed * (current.StartTime - dashPressTime);
+            double extraNeededAfterDashPress = Math.Max(0.0, remainingDistanceFromDashPress - walkCapacityFromDashPress);
+            double minDashDuration = extraNeededAfterDashPress / (effectiveDashSpeed - effectiveWalkSpeed);
 
-            double loCandidate = dashPressTime + minDashDuration;
-            double lo = Math.Max(dashPressTime, Math.Min(hi, loCandidate));
+            double lo = Math.Max(dashPressTime, dashPressTime + minDashDuration);
 
+            if (hi + eps < lo) throw new ArgumentException("dashReleaseHi should always be greater than or equal to dashReleaseLo");
             return (lo, hi);
         }
 
@@ -113,8 +116,10 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double maxDistanceTravel = Math.Abs(current.NormalizedX - currentPos) + catcher_radius;
             double minTimeNeeded = minDistanceTravel / effectiveWalkSpeed; // can be negative if we're already in radius
             double maxTimeNeeded = maxDistanceTravel / effectiveWalkSpeed;
-
-            return (Math.Max(dashReleaseTime, dashReleaseTime + minTimeNeeded), Math.Min(current.StartTime, dashReleaseTime + maxTimeNeeded));
+            double lo = Math.Max(dashReleaseTime, dashReleaseTime + minTimeNeeded);
+            double hi = Math.Min(current.StartTime, dashReleaseTime + maxTimeNeeded);
+            if (hi + eps < lo) throw new ArgumentException("walkReleaseHi should always be greater than or equal to walkReleaseLo");
+            return (lo, hi);
         }
 
 
@@ -137,21 +142,18 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                     continue;
                 }
                 double hyperMultiplier = calcHyperMult(catchCurrent, catchPrev, startPos);
-
                 var (walkPressLo, walkPressHi) = calcWalkPressRange(catchCurrent, catchPrev, hyperMultiplier, startPos);
-                if (walkPressHi + eps < walkPressLo) throw new ArgumentException("walkPressHi should always be greater than or equal to walkPressLo");
                 double walkPressRange = walkPressHi - walkPressLo;
+                if (walkPressRange <= 0) continue; // impossible starting position so we skip (need to verify this should actually be possible)
                 List<double> logProbabilitiesDP = new List<double>();
                 foreach (double walkPressTime in linspace(walkPressLo, walkPressHi, walk_press_steps))
                 {
                     var (dashPressLo, dashPressHi) = calcDashPressRange(catchCurrent, hyperMultiplier, startPos, walkPressTime);
-                    if (dashPressHi + eps < dashPressLo) throw new ArgumentException("dashPressHi should always be greater than or equal to dashPressLo");
                     double dashPressRange = Math.Abs(dashPressHi - dashPressLo);
                     List<double> logProbabilitiesDR = new List<double>();
                     foreach (double dashPressTime in linspace(dashPressLo, dashPressHi, dash_press_steps))
                     {
                         var (dashReleaseLo, dashReleaseHi) = calcDashReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime);
-                        if (dashReleaseHi + eps < dashReleaseLo) throw new ArgumentException("dashReleaseHi should always be greater than or equal to dashReleaseLo");
                         double dashReleaseRange = Math.Abs(dashReleaseHi - dashReleaseLo);
                         // if you're holding dash through to the next note then there is no release timing
                         if (dashReleaseHi + eps >= catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
@@ -164,7 +166,6 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                         foreach (double dashReleaseTime in linspace(dashReleaseLo, dashReleaseHi, dash_release_steps))
                         {
                             var (walkReleaseLo, walkReleaseHi) = calcWalkReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime, dashReleaseTime);
-                            if (walkReleaseHi + eps < walkReleaseLo) throw new ArgumentException("walkReleaseHi should always be greater than or equal to walkReleaseLo");
                             double walkReleaseRange = Math.Abs(walkReleaseHi - walkReleaseLo);
                             // if you're holding walk through to the next note then there is no release timing
                             if (walkReleaseHi + eps >= catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
