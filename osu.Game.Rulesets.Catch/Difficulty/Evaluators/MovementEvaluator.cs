@@ -149,16 +149,16 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 foreach (double walkPressTime in linspace(walkPressLo, walkPressHi, walk_press_steps))
                 {
                     var (dashPressLo, dashPressHi) = calcDashPressRange(catchCurrent, hyperMultiplier, startPos, walkPressTime);
-                    double dashPressRange = Math.Abs(dashPressHi - dashPressLo);
+                    double dashPressRange = dashPressHi + eps - dashPressLo;
                     List<double> logProbabilitiesDR = new List<double>();
                     foreach (double dashPressTime in linspace(dashPressLo, dashPressHi, dash_press_steps))
                     {
                         var (dashReleaseLo, dashReleaseHi) = calcDashReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime);
-                        double dashReleaseRange = Math.Abs(dashReleaseHi - dashReleaseLo);
+                        double dashReleaseRange = dashReleaseHi + eps - dashReleaseLo;
                         // if you're holding dash through to the next note then there is no release timing
                         if (dashReleaseHi + eps >= catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
                         {
-                            // TODO: This should also propagagte into the press timing of the next note
+                            // TODO: This should also propagate into the press timing of the next note
                             logProbabilitiesDR.Add(0.0);
                             continue;
                         }
@@ -166,11 +166,11 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                         foreach (double dashReleaseTime in linspace(dashReleaseLo, dashReleaseHi, dash_release_steps))
                         {
                             var (walkReleaseLo, walkReleaseHi) = calcWalkReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime, dashReleaseTime);
-                            double walkReleaseRange = Math.Abs(walkReleaseHi - walkReleaseLo);
+                            double walkReleaseRange = walkReleaseHi + eps - walkReleaseLo;
                             // if you're holding walk through to the next note then there is no release timing
                             if (walkReleaseHi + eps >= catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
                             {
-                                // TODO: This should also propagagte into the press timing of the next note
+                                // TODO: This should also propagate into the press timing of the next note
                                 logProbabilitiesWR.Add(0.0);
                                 continue;
                             }
