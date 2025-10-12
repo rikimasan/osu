@@ -42,22 +42,43 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             return Math.Max(1.0, vReq / current.NormalizedDashSpeed);
         }
 
-        // lo: previous start time
+        // lo: how early can you start moving to the next note without dropping the previous one
         // hi: if you dash the whole way, what's the latest time you can leave
         private static (double lo, double hi) calcWalkPressRange(CatchDifficultyHitObject current, CatchDifficultyHitObject prev, double hyperMultiplier, double startPos)
         {
+            double effectiveWalkSpeed = hyperMultiplier * current.NormalizedWalkSpeed;
             double effectiveDashSpeed = hyperMultiplier * current.NormalizedDashSpeed;
 
+            double signNext = Math.Sign(current.NormalizedX - startPos);
+            double signPrev = Math.Sign(prev.NormalizedX - startPos);
+            double allowedPreMove = signNext == signPrev ? Math.Abs(prev.NormalizedX - startPos) + catcher_radius : catcher_radius - Math.Abs(prev.NormalizedX - startPos);
+
+            double lo = prev.StartTime - (allowedPreMove / effectiveWalkSpeed);
+
             double minTravelDistance = Math.Max(0.0, Math.Abs(current.NormalizedX - startPos) - catcher_radius);
-            return (prev.StartTime, current.StartTime - (minTravelDistance / effectiveDashSpeed));
+            double hi = current.StartTime - (minTravelDistance / effectiveDashSpeed);
+
+            return (lo, hi);
         }
 
         // lo: you can't dash before you've started walking
         // hi: what is minimum amount of time spent dashing needed, subtract from current.StartTime
-        private static (double lo, double hi) calcDashPressRange(CatchDifficultyHitObject current, double hyperMultiplier, double startPos, double walkPressTime)
+        private static (double lo, double hi) calcDashPressRange(CatchDifficultyHitObject current, CatchDifficultyHitObject prev, double hyperMultiplier, double startPos, double walkPressTime)
         {
             double effectiveWalkSpeed = hyperMultiplier * current.NormalizedWalkSpeed;
             double effectiveDashSpeed = hyperMultiplier * current.NormalizedDashSpeed;
+
+            double lo = walkPressTime;
+            // if we start moving before catching previous, we need to make sure we don't dash out before we catch it
+            if (walkPressTime + eps < prev.StartTime)
+            {
+                double signNext = Math.Sign(current.NormalizedX - startPos);
+                double signPrev = Math.Sign(prev.NormalizedX - startPos);
+                double allowedPreMove = signNext == signPrev ? Math.Abs(prev.NormalizedX - startPos) + catcher_radius : catcher_radius - Math.Abs(prev.NormalizedX - startPos);
+                double timeInNote = prev.StartTime - walkPressTime;
+                double earliestDashPressBeforePrev = walkPressTime + ((effectiveDashSpeed * timeInNote - allowedPreMove) / (effectiveDashSpeed - effectiveWalkSpeed));
+                lo = earliestDashPressBeforePrev;
+            }
 
             double minTravelDistance = Math.Abs(current.NormalizedX - startPos) - catcher_radius;
             double maxWalkDistance = effectiveWalkSpeed * (current.StartTime - walkPressTime);
@@ -67,7 +88,6 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double maxDistanceTravel = Math.Abs(current.NormalizedX - startPos) + catcher_radius;
             double latestDashPressBeforeFarEdge = walkPressTime + maxDistanceTravel / effectiveWalkSpeed;
 
-            double lo = walkPressTime;
             double hi = Math.Min(current.StartTime - minDashTime, latestDashPressBeforeFarEdge);
             if (hi + eps < lo) throw new ArgumentException("dashPressHi should always be greater than or equal to dashPressLo");
             return (lo, hi);
@@ -149,7 +169,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                 double wpLogP = Math.Log(1.0 - (1.0 / (eps + 1.0 + walkPressRange)));
                 foreach (double walkPressTime in linspace(walkPressLo, walkPressHi, walk_press_steps))
                 {
-                    var (dashPressLo, dashPressHi) = calcDashPressRange(catchCurrent, hyperMultiplier, startPos, walkPressTime);
+                    var (dashPressLo, dashPressHi) = calcDashPressRange(catchCurrent, catchPrev, hyperMultiplier, startPos, walkPressTime);
                     double dashPressRange = dashPressHi + eps - dashPressLo;
                     double dpLogP = Math.Log(1.0 - (1.0 / (eps + 1.0 + dashPressRange)));
                     foreach (double dashPressTime in linspace(dashPressLo, dashPressHi, dash_press_steps))
@@ -177,7 +197,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             walk_passthrough = best[2] >= 0.0 ? true : false;
             dash_passthrough = best[3] >= 0.0 ? true : false;
             // Using Max as a temporary fix for cheesable back and forths until I do backprop
-            return Math.Log(0.914) / Math.Log(1.0 - Math.Exp(best.Sum()));
+            return Math.Log(0.904) / Math.Log(1.0 - Math.Exp(best.Sum()));
         }
     }
 }
