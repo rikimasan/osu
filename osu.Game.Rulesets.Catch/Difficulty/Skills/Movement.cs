@@ -19,9 +19,9 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Skills
 
         public Movement(Mod[] mods, float halfCatcherWidth, double clockRate) : base(mods) { }
 
-        protected override double StrainValueOf(DifficultyHitObject current)
+        protected override double StrainValueOf(DifficultyHitObject current, ref bool walk_passthrough, ref bool dash_passthrough)
         {
-            return MovementEvaluator.EvaluateDifficultyOf(current);
+            return MovementEvaluator.EvaluateDifficultyOf(current, ref walk_passthrough, ref dash_passthrough);
         }
     }
 }

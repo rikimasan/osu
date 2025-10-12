@@ -29,7 +29,7 @@ namespace osu.Game.Rulesets.Mania.Difficulty.Skills
             overallStrain = 1;
         }
 
-        protected override double StrainValueOf(DifficultyHitObject current)
+        protected override double StrainValueOf(DifficultyHitObject current, ref bool _w, ref bool _d)
         {
             var maniaCurrent = (ManiaDifficultyHitObject)current;
 

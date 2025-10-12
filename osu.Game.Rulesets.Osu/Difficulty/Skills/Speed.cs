@@ -37,7 +37,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Skills
 
         protected override double CalculateInitialStrain(double time, DifficultyHitObject current) => (currentStrain * currentRhythm) * strainDecay(time - current.Previous(0).StartTime);
 
-        protected override double StrainValueAt(DifficultyHitObject current)
+        protected override double StrainValueAt(DifficultyHitObject current, ref bool _w, ref bool _d)
         {
             currentStrain *= strainDecay(((OsuDifficultyHitObject)current).AdjustedDeltaTime);
             currentStrain += SpeedEvaluator.EvaluateDifficultyOf(current, Mods) * skillMultiplier;

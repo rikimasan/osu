@@ -39,7 +39,7 @@ namespace osu.Game.Rulesets.Taiko.Difficulty.Skills
 
         private double strainDecay(double ms) => Math.Pow(strainDecayBase, ms / 1000);
 
-        protected override double StrainValueAt(DifficultyHitObject current)
+        protected override double StrainValueAt(DifficultyHitObject current, ref bool _w, ref bool _d)
         {
             currentStrain *= strainDecay(current.DeltaTime);
             double staminaDifficulty = StaminaEvaluator.EvaluateDifficultyOf(current) * skillMultiplier;

@@ -123,7 +123,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
         }
 
 
-        public static double EvaluateDifficultyOf(DifficultyHitObject current)
+        public static double EvaluateDifficultyOf(DifficultyHitObject current, ref bool walk_passthrough, ref bool dash_passthrough)
         {
             var catchCurrent = (CatchDifficultyHitObject)current;
             var catchPrev = (CatchDifficultyHitObject)current.Previous(0);
@@ -138,6 +138,8 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             {
                 if (startPos >= catchCurrent.NormalizedX - catcher_radius && startPos <= catchCurrent.NormalizedX + catcher_radius)
                 {
+                    walk_passthrough = true;
+                    dash_passthrough = true;
                     return 0.0;
                 }
                 double hyperMultiplier = calcHyperMult(catchCurrent, catchPrev, startPos);
@@ -166,14 +168,16 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                             double wrLogP = (walkReleaseHi + eps >= catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
                                 ? 0.0
                                 : Math.Log(1.0 - (1.0 / (eps + 1.0 + walkReleaseRange)));
-                            List<double> valid_input = [wpLogP, dpLogP, drLogP, wrLogP];
+                            List<double> valid_input = [walk_passthrough ? 0.0 : wpLogP, dash_passthrough ? 0.0 : dpLogP, drLogP, wrLogP];
                             best = best.Sum() > valid_input.Sum() ? best : valid_input;
                         }
                     }
                 }
             }
+            walk_passthrough = best[2] >= 0.0 ? true : false;
+            dash_passthrough = best[3] >= 0.0 ? true : false;
             // Using Max as a temporary fix for cheesable back and forths until I do backprop
-            return Math.Log(0.923) / Math.Log(1.0 - Math.Exp(best.Sum()));
+            return Math.Log(0.914) / Math.Log(1.0 - Math.Exp(best.Sum()));
         }
     }
 }

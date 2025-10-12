@@ -79,12 +79,14 @@ namespace osu.Game.Rulesets.Difficulty
             if (!Beatmap.HitObjects.Any())
                 return CreateDifficultyAttributes(Beatmap, playableMods, skills, clockRate);
 
+            bool walk = false;
+            bool dash = false;
             foreach (var hitObject in getDifficultyHitObjects())
             {
                 foreach (var skill in skills)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    skill.Process(hitObject);
+                    skill.Process(hitObject, ref walk, ref dash);
                 }
             }
 
@@ -126,7 +128,8 @@ namespace osu.Game.Rulesets.Difficulty
             var difficultyObjects = getDifficultyHitObjects().ToArray();
 
             int currentIndex = 0;
-
+            bool walk_passthrough = false;
+            bool dash_passthrough = false;
             foreach (var obj in Beatmap.HitObjects)
             {
                 progressiveBeatmap.HitObjects.Add(obj);
@@ -136,7 +139,7 @@ namespace osu.Game.Rulesets.Difficulty
                     foreach (var skill in skills)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        skill.Process(difficultyObjects[currentIndex]);
+                        skill.Process(difficultyObjects[currentIndex], ref walk_passthrough, ref dash_passthrough);
                     }
 
                     currentIndex++;
