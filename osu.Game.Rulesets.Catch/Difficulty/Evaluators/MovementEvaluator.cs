@@ -188,7 +188,12 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                             double wrLogP = (walkReleaseHi + eps >= catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
                                 ? 0.0
                                 : Math.Log(1.0 - (1.0 / (eps + 1.0 + walkReleaseRange)));
-                            List<double> valid_input = [walk_passthrough ? 0.0 : wpLogP, dash_passthrough ? 0.0 : dpLogP, drLogP, wrLogP];
+                            List<double> valid_input = [
+                                walk_passthrough ? 0.0 : wpLogP,
+                                (dash_passthrough || (dashReleaseTime - dashPressTime < eps)) ? 0.0 : dpLogP,
+                                (dashReleaseTime - dashPressTime < eps) ? 0.0 : drLogP,
+                                wrLogP
+                                ];
                             best = best.Sum() > valid_input.Sum() ? best : valid_input;
                         }
                     }
