@@ -143,13 +143,16 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
         }
 
 
-        public static double EvaluateDifficultyOf(DifficultyHitObject current, ref bool walk_passthrough, ref bool dash_passthrough)
+        public static double EvaluateDifficultyOf(DifficultyHitObject current, ref bool walk_press_passthrough, ref bool dash_press_passthrough)
         {
             var catchCurrent = (CatchDifficultyHitObject)current;
             var catchPrev = (CatchDifficultyHitObject)current.Previous(0);
             var catchNext = (CatchDifficultyHitObject)current.Next(0);
             if (catchPrev == null) return 0.0;
             if (catchNext == null) return 0.0;
+
+            bool next_walk_passthrough = false;
+            bool next_dash_passthrough = false;
             // TODO: Propagate start positions and key press passthrough across notes to minimize total difficulty
             // TODO: Non-uniform weighting across each distribution
             var (startPosLo, startPosHi) = (catchPrev.NormalizedX - catcher_radius, catchPrev.NormalizedX + catcher_radius);
@@ -158,8 +161,8 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             {
                 if (startPos >= catchCurrent.NormalizedX - catcher_radius && startPos <= catchCurrent.NormalizedX + catcher_radius)
                 {
-                    walk_passthrough = true;
-                    dash_passthrough = true;
+                    walk_press_passthrough = true;
+                    dash_press_passthrough = true;
                     return 0.0;
                 }
                 double hyperMultiplier = calcHyperMult(catchCurrent, catchPrev, startPos);
@@ -177,32 +180,48 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
                         var (dashReleaseLo, dashReleaseHi) = calcDashReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime);
                         double dashReleaseRange = dashReleaseHi + eps - dashReleaseLo;
                         // if you're holding dash through to the next note then there is no release timing
-                        double drLogP = (dashReleaseHi + eps >= catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
-                            ? 0.0
-                            : Math.Log(1.0 - (1.0 / (eps + 1.0 + dashReleaseRange)));
+                        double drLogP = Math.Log(1.0 - (1.0 / (eps + 1.0 + dashReleaseRange)));
+                        bool dash_release_passthrough = dashReleaseHi + eps >= catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX);
                         foreach (double dashReleaseTime in linspace(dashReleaseLo, dashReleaseHi, dash_release_steps))
                         {
                             var (walkReleaseLo, walkReleaseHi) = calcWalkReleaseRange(catchCurrent, hyperMultiplier, startPos, walkPressTime, dashPressTime, dashReleaseTime);
                             double walkReleaseRange = walkReleaseHi + eps - walkReleaseLo;
                             // if you're holding walk through to the next note then there is no release timing
-                            double wrLogP = (walkReleaseHi + eps >= catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX))
-                                ? 0.0
-                                : Math.Log(1.0 - (1.0 / (eps + 1.0 + walkReleaseRange)));
+                            double wrLogP = Math.Log(1.0 - (1.0 / (eps + 1.0 + walkReleaseRange)));
+                            bool walk_release_passthrough = walkReleaseHi + eps >= catchCurrent.StartTime && Math.Sign(catchCurrent.NormalizedX - startPos) == Math.Sign(catchNext.NormalizedX - catchCurrent.NormalizedX);
                             List<double> valid_input = [
-                                walk_passthrough ? 0.0 : wpLogP,
-                                (dash_passthrough || (dashReleaseTime - dashPressTime < eps)) ? 0.0 : dpLogP,
-                                (dashReleaseTime - dashPressTime < eps) ? 0.0 : drLogP,
-                                wrLogP
+                                walk_press_passthrough
+                                ? 0.0
+                                : wpLogP,
+
+                                dash_press_passthrough
+                                || (dashReleaseTime - dashPressTime < eps)
+                                ? 0.0
+                                : dpLogP,
+
+                                dash_release_passthrough
+                                || (dashReleaseTime - dashPressTime < eps)
+                                ? 0.0
+                                : drLogP,
+
+                                walk_release_passthrough
+                                ? 0.0
+                                : wrLogP
                                 ];
-                            best = best.Sum() > valid_input.Sum() ? best : valid_input;
+                            if (valid_input.Sum() > best.Sum())
+                            {
+                                best = valid_input;
+                                next_walk_passthrough = walk_release_passthrough;
+                                next_dash_passthrough = dash_release_passthrough;
+                            }
                         }
                     }
                 }
             }
-            walk_passthrough = best[2] >= 0.0 ? true : false;
-            dash_passthrough = best[3] >= 0.0 ? true : false;
+            walk_press_passthrough = next_walk_passthrough;
+            dash_press_passthrough = next_dash_passthrough;
             // Using Max as a temporary fix for cheesable back and forths until I do backprop
-            return Math.Log(0.904) / Math.Log(1.0 - Math.Exp(best.Sum()));
+            return Math.Log(0.896) / Math.Log(1.0 - Math.Exp(best.Sum()));
         }
     }
 }
