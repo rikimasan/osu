@@ -107,7 +107,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             // Upper bound
             double maxDistanceTravel = sign * (current.NormalizedX - currentPosAtDashPress) + catcher_radius;
             double maxDashDuration = maxDistanceTravel / effectiveDashSpeed;
-            double hi = Math.Min(current.StartTime, dashPressTime + maxDashDuration);
+            double hi = dashPressTime + maxDashDuration;
 
             // Lower bound
             double remainingDistanceFromDashPress = Math.Max(0.0, sign * (current.NormalizedX - currentPosAtDashPress) - catcher_radius);
@@ -137,7 +137,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             double minTimeNeeded = minDistanceTravel / effectiveWalkSpeed;
             double maxTimeNeeded = maxDistanceTravel / effectiveWalkSpeed;
             double lo = Math.Max(dashReleaseTime, dashReleaseTime + minTimeNeeded);
-            double hi = Math.Min(current.StartTime, dashReleaseTime + maxTimeNeeded);
+            double hi = dashReleaseTime + maxTimeNeeded;
             if (hi + eps < lo) throw new ArgumentException("walkReleaseHi should always be greater than or equal to walkReleaseLo");
             return (lo, hi);
         }
@@ -221,7 +221,7 @@ namespace osu.Game.Rulesets.Catch.Difficulty.Evaluators
             walk_press_passthrough = next_walk_passthrough;
             dash_press_passthrough = next_dash_passthrough;
             // Using Max as a temporary fix for cheesable back and forths until I do backprop
-            return Math.Log(0.896) / Math.Log(1.0 - Math.Exp(best.Sum()));
+            return Math.Log(0.884) / Math.Log(1.0 - Math.Exp(best.Sum()));
         }
     }
 }
