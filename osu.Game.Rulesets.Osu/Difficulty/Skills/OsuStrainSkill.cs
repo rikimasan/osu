@@ -7,6 +7,7 @@ using osu.Game.Rulesets.Difficulty.Skills;
 using osu.Game.Rulesets.Mods;
 using System.Linq;
 using osu.Framework.Utils;
+using osu.Game.Rulesets.Osu.Difficulty;
 
 namespace osu.Game.Rulesets.Osu.Difficulty.Skills
 {
@@ -23,9 +24,12 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Skills
         /// </summary>
         protected virtual double ReducedStrainBaseline => 0.75;
 
-        protected OsuStrainSkill(Mod[] mods)
+        protected OsuDifficultyTuning Tuning { get; }
+
+        protected OsuStrainSkill(Mod[] mods, OsuDifficultyTuning tuning)
             : base(mods)
         {
+            Tuning = tuning;
         }
 
         public override double DifficultyValue()

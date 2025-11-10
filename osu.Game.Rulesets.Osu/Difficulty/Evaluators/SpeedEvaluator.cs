@@ -7,6 +7,7 @@ using System.Linq;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Difficulty.Utils;
 using osu.Game.Rulesets.Mods;
+using osu.Game.Rulesets.Osu.Difficulty;
 using osu.Game.Rulesets.Osu.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Osu.Mods;
 using osu.Game.Rulesets.Osu.Objects;
@@ -15,10 +16,6 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Evaluators
 {
     public static class SpeedEvaluator
     {
-        private const double single_spacing_threshold = OsuDifficultyHitObject.NORMALISED_DIAMETER * 1.25; // 1.25 circles distance between centers
-        private const double min_speed_bonus = 200; // 200 BPM 1/4th
-        private const double speed_balancing_factor = 40;
-        private const double distance_multiplier = 0.8;
 
         /// <summary>
         /// Evaluates the difficulty of tapping the current object, based on:
@@ -28,7 +25,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Evaluators
         /// <item><description>and how easily they can be cheesed.</description></item>
         /// </list>
         /// </summary>
-        public static double EvaluateDifficultyOf(DifficultyHitObject current, IReadOnlyList<Mod> mods)
+        public static double EvaluateDifficultyOf(DifficultyHitObject current, IReadOnlyList<Mod> mods, OsuDifficultyTuning tuning)
         {
             if (current.BaseObject is Spinner)
                 return 0;
@@ -48,17 +45,19 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Evaluators
             double speedBonus = 0.0;
 
             // Add additional scaling bonus for streams/bursts higher than 200bpm
-            if (DifficultyCalculationUtils.MillisecondsToBPM(strainTime) > min_speed_bonus)
-                speedBonus = 0.75 * Math.Pow((DifficultyCalculationUtils.BPMToMilliseconds(min_speed_bonus) - strainTime) / speed_balancing_factor, 2);
+            if (DifficultyCalculationUtils.MillisecondsToBPM(strainTime) > tuning.SpeedMinSpeedBonusBpm)
+                speedBonus = 0.75 * Math.Pow((DifficultyCalculationUtils.BPMToMilliseconds(tuning.SpeedMinSpeedBonusBpm) - strainTime) / tuning.SpeedBalancingFactor, 2);
 
             double travelDistance = osuPrevObj?.TravelDistance ?? 0;
             double distance = travelDistance + osuCurrObj.MinimumJumpDistance;
 
             // Cap distance at single_spacing_threshold
-            distance = Math.Min(distance, single_spacing_threshold);
+            double singleSpacingThreshold = tuning.SpeedSingleSpacingThreshold;
+
+            distance = Math.Min(distance, singleSpacingThreshold);
 
             // Max distance bonus is 1 * `distance_multiplier` at single_spacing_threshold
-            double distanceBonus = Math.Pow(distance / single_spacing_threshold, 3.95) * distance_multiplier;
+            double distanceBonus = Math.Pow(distance / singleSpacingThreshold, 3.95) * tuning.SpeedDistanceBonusScale;
 
             // Apply reduced small circle bonus because flow aim difficulty on small circles doesn't scale as hard as jumps
             distanceBonus *= Math.Sqrt(osuCurrObj.SmallCircleBonus);

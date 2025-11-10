@@ -21,6 +21,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty
     {
         public const double PERFORMANCE_BASE_MULTIPLIER = 1.14; // This is being adjusted to keep the final pp value scaled around what it used to be when changing things.
 
+        private readonly OsuDifficultyTuning fallbackTuning;
         private bool usingClassicSliderAccuracy;
         private bool usingScoreV2;
 
@@ -58,14 +59,16 @@ namespace osu.Game.Rulesets.Osu.Difficulty
         private double aimEstimatedSliderBreaks;
         private double speedEstimatedSliderBreaks;
 
-        public OsuPerformanceCalculator()
-            : base(new OsuRuleset())
+        public OsuPerformanceCalculator(OsuDifficultyTuning? tuning = null)
+            : base(new OsuRuleset(tuning))
         {
+            fallbackTuning = tuning ?? OsuDifficultyTuning.Default;
         }
 
         protected override PerformanceAttributes CreatePerformanceAttributes(ScoreInfo score, DifficultyAttributes attributes)
         {
             var osuAttributes = (OsuDifficultyAttributes)attributes;
+            var tuning = osuAttributes.Tuning ?? fallbackTuning;
 
             usingClassicSliderAccuracy = score.Mods.OfType<OsuModClassic>().Any(m => m.NoSliderHeadAccuracy.Value);
             usingScoreV2 = score.Mods.Any(m => m is ModScoreV2);
@@ -137,10 +140,10 @@ namespace osu.Game.Rulesets.Osu.Difficulty
 
             speedDeviation = calculateSpeedDeviation(osuAttributes);
 
-            double aimValue = computeAimValue(score, osuAttributes);
-            double speedValue = computeSpeedValue(score, osuAttributes);
-            double accuracyValue = computeAccuracyValue(score, osuAttributes);
-            double flashlightValue = computeFlashlightValue(score, osuAttributes);
+            double aimValue = computeAimValue(score, osuAttributes) * tuning.AimPerformanceScale;
+            double speedValue = computeSpeedValue(score, osuAttributes) * tuning.SpeedPerformanceScale;
+            double accuracyValue = computeAccuracyValue(score, osuAttributes) * tuning.AccuracyPerformanceScale;
+            double flashlightValue = computeFlashlightValue(score, osuAttributes) * tuning.FlashlightPerformanceScale;
 
             double totalValue =
                 Math.Pow(
@@ -148,7 +151,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty
                     Math.Pow(speedValue, 1.1) +
                     Math.Pow(accuracyValue, 1.1) +
                     Math.Pow(flashlightValue, 1.1), 1.0 / 1.1
-                ) * multiplier;
+                ) * multiplier * tuning.TotalPerformanceScale;
 
             return new OsuPerformanceAttributes
             {
@@ -162,7 +165,8 @@ namespace osu.Game.Rulesets.Osu.Difficulty
                 AimEstimatedSliderBreaks = aimEstimatedSliderBreaks,
                 SpeedEstimatedSliderBreaks = speedEstimatedSliderBreaks,
                 SpeedDeviation = speedDeviation,
-                Total = totalValue
+                Total = totalValue,
+                Tuning = tuning
             };
         }
 

@@ -10,6 +10,7 @@ using osu.Game.Rulesets.Osu.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Osu.Objects;
 using System.Linq;
 using osu.Game.Rulesets.Osu.Difficulty.Utils;
+using osu.Game.Rulesets.Osu.Difficulty;
 
 namespace osu.Game.Rulesets.Osu.Difficulty.Skills
 {
@@ -28,8 +29,8 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Skills
 
         protected override int ReducedSectionCount => 5;
 
-        public Speed(Mod[] mods)
-            : base(mods)
+        public Speed(Mod[] mods, OsuDifficultyTuning tuning)
+            : base(mods, tuning)
         {
         }
 
@@ -40,9 +41,9 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Skills
         protected override double StrainValueAt(DifficultyHitObject current)
         {
             currentStrain *= strainDecay(((OsuDifficultyHitObject)current).AdjustedDeltaTime);
-            currentStrain += SpeedEvaluator.EvaluateDifficultyOf(current, Mods) * skillMultiplier;
+            currentStrain += SpeedEvaluator.EvaluateDifficultyOf(current, Mods, Tuning) * skillMultiplier * Tuning.SpeedSkillDifficultyScale;
 
-            currentRhythm = RhythmEvaluator.EvaluateDifficultyOf(current);
+            currentRhythm = RhythmEvaluator.EvaluateDifficultyOf(current, Tuning);
 
             double totalStrain = currentStrain * currentRhythm;
 
