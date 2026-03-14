@@ -42,14 +42,10 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Skills
             currentDifficulty *= decay;
             currentDifficulty += SpeedEvaluator.EvaluateDifficultyOf(current, tuning) * (1 - decay) * tuning.SpeedSkillMultiplier;
 
-            double currentRhythm = RhythmEvaluator.EvaluateDifficultyOf(current, tuning);
-
-            double totalDifficulty = currentDifficulty * currentRhythm;
-
             if (current.BaseObject is Slider)
-                sliderStrains.Add(totalDifficulty);
+                sliderStrains.Add(currentDifficulty);
 
-            return totalDifficulty;
+            return currentDifficulty;
         }
 
         public double RelevantNoteCount()
