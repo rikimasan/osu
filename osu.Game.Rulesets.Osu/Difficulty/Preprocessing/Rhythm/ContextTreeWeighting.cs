@@ -96,5 +96,40 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             root = new CtwNode(alphabetSize);
             contextBuffer = new int[maxDepth];
         }
+
+        // Returns surprise (-log P_ctw) for the symbol before updating the model.
+        // Walks the context tree from root to leaf using the context buffer,
+        // updates KT estimates bottom-up, then recomputes weighted probabilities.
+        public double Update(int symbol)
+        {
+            double previousLogProb = root.LogProbWeighted;
+
+            int depth = Math.Min(bufferCount, maxDepth);
+
+            // Collect nodes along the context path (root to leaf)
+            var path = new CtwNode[depth + 1];
+            path[0] = root;
+
+            for (int d = 0; d < depth; d++)
+            {
+                int contextSymbol = contextBuffer[(bufferCount - 1 - d) % maxDepth];
+                path[d + 1] = path[d].GetOrCreateChild(contextSymbol);
+            }
+
+            // Update KT estimates at every node along the path
+            for (int d = depth; d >= 0; d--)
+                path[d].UpdateKT(symbol);
+
+            // Recompute weighted probabilities bottom-up
+            for (int d = depth; d >= 0; d--)
+                path[d].RecomputeWeighted(d == depth);
+
+            // Store symbol in circular context buffer
+            contextBuffer[bufferCount % maxDepth] = symbol;
+            bufferCount++;
+
+            // Surprise = negative log-probability of this symbol under the CTW model
+            return -(root.LogProbWeighted - previousLogProb);
+        }
     }
 }
