@@ -20,8 +20,12 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
         // Center bin index (ratio ≈ 1.0)
         private const int center_bin = RATIO_BIN_COUNT / 2;
 
-        public static int Quantize(double currDelta, double prevDelta, double epsilon)
+        public static int Quantize(double currDelta, double prevDelta, double epsilon, double doubletapness, double doubletapThreshold)
         {
+            // Doubletappable notes get their own symbol so the model treats them distinctly
+            if (doubletapness > doubletapThreshold)
+                return DTAP_SYMBOL;
+
             // Deltas within the OD hit window are indistinguishable — snap to center
             if (Math.Abs(currDelta - prevDelta) < epsilon)
                 return center_bin;
