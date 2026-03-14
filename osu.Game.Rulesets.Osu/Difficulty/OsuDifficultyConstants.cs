@@ -62,17 +62,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty
         public double FlashlightMinAngleScale { get; init; } = 0.2;
 
         // RhythmEvaluator constants
-        public int RhythmHistoryTimeMax { get; init; } = 5 * 1000; // 5 seconds
-        public int RhythmHistoryObjectsMax { get; init; } = 32;
-        public double RhythmOverallScale { get; init; } = 0.8;
-        public double RhythmRatioScale { get; init; } = 32.0;
-        public double RhythmSliderIntoNerf { get; init; } = 0.5;
-        public double RhythmRepeatPolarityNerf { get; init; } = 0.5;
-        public double RhythmSpeedupConsecutiveNerf { get; init; } = 0.125;
-        public double RhythmRepeatIslandSizeNerf { get; init; } = 0.5;
-        public double RhythmDoubletapScale { get; init; } = 0.75;
-        public double RhythmSpeedupSliderIntoNerf { get; init; } = 0.6;
-        public double RhythmSpeedupSliderFromNerf { get; init; } = 0.6;
+        public double RhythmOverallScale { get; init; } = 0.8; // balancing — scales surprise contribution to rhythm multiplier
 
         // CTW rhythm preprocessor constants
         public int CtwMaxDepth { get; init; } = 8; // structural — how far back the model looks
