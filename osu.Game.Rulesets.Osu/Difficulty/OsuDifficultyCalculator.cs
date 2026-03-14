@@ -55,6 +55,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty
             var aim = skills.OfType<Aim>().Single(a => a.IncludeSliders);
             var aimWithoutSliders = skills.OfType<Aim>().Single(a => !a.IncludeSliders);
             var speed = skills.OfType<Speed>().Single();
+            var rhythm = skills.OfType<Rhythm>().Single();
             var flashlight = skills.OfType<Flashlight>().SingleOrDefault();
             var reading = skills.OfType<Reading>().Single();
 
@@ -95,6 +96,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty
 
             double aimRating = osuRatingCalculator.ComputeAimRating(aimDifficultyValue);
             double speedRating = osuRatingCalculator.ComputeSpeedRating(speedDifficultyValue);
+            double rhythmRating = osuRatingCalculator.ComputeRhythmRating(rhythm.DifficultyValue());
             double readingRating = osuRatingCalculator.ComputeReadingRating(readingDifficultyValue);
 
             double flashlightRating = 0.0;
@@ -127,6 +129,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty
                 SpeedDifficulty = speedRating,
                 SpeedNoteCount = speedNotes,
                 FlashlightDifficulty = flashlightRating,
+                RhythmDifficulty = rhythmRating,
                 ReadingDifficulty = readingRating,
                 SliderFactor = sliderFactor,
                 AimDifficultStrainCount = aimDifficultStrainCount,
@@ -187,6 +190,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty
                 new Aim(mods, tuning, true),
                 new Aim(mods, tuning, false),
                 new Speed(mods, tuning),
+                new Rhythm(mods, tuning),
                 new Reading(mods, tuning)
             };
 
