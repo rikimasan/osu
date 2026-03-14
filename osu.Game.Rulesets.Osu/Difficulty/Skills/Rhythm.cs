@@ -34,5 +34,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Skills
 
         public override double DifficultyValue()
             => Math.Pow(ObjectDifficulties.Where(d => d > 0).Sum(), tuning.RhythmLengthExponent);
+
+        public static double DifficultyToPerformance(double difficulty) => 4.0 * Math.Pow(difficulty, 3.0);
     }
 }
