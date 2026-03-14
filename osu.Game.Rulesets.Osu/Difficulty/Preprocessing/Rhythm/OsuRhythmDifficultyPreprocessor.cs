@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
+using osu.Game.Rulesets.Difficulty.Utils;
 using osu.Game.Rulesets.Osu.Objects;
 using osu.Game.Rulesets.Scoring;
 
@@ -33,7 +34,10 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
                 int symbol = RhythmSymbolQuantizer.Quantize(currDelta, prevDelta, epsilon, doubletapness, tuning.CtwDoubletapThreshold);
 
                 double surprise = ctw.Update(symbol);
-                currObj.CtwSurprise = surprise;
+
+                // Normalize raw surprise into [0, 1] — ln(K) is maximum surprise for a uniform distribution
+                double logK = Math.Log(RhythmSymbolQuantizer.ALPHABET_SIZE);
+                currObj.CtwSurprise = DifficultyCalculationUtils.Smoothstep(surprise / logK, 0.05, 0.8);
             }
         }
     }
