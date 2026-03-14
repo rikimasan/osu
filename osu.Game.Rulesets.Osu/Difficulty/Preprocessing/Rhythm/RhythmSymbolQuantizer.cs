@@ -17,8 +17,15 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
         private static readonly double log_ratio_max = Math.Log(16.0);
         private static readonly double bin_width = (log_ratio_max - log_ratio_min) / RATIO_BIN_COUNT;
 
-        public static int Quantize(double currDelta, double prevDelta)
+        // Center bin index (ratio ≈ 1.0)
+        private const int center_bin = RATIO_BIN_COUNT / 2;
+
+        public static int Quantize(double currDelta, double prevDelta, double epsilon)
         {
+            // Deltas within the OD hit window are indistinguishable — snap to center
+            if (Math.Abs(currDelta - prevDelta) < epsilon)
+                return center_bin;
+
             double ratio = currDelta / prevDelta;
             double logRatio = Math.Log(ratio);
 
