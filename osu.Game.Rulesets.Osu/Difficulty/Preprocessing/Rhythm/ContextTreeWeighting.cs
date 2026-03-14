@@ -13,12 +13,34 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
         private double logProbWeighted;
         private CtwNode?[]? children;
 
+        private int totalCount;
+
         public CtwNode(int alphabetSize)
         {
             this.alphabetSize = alphabetSize;
             counts = new int[alphabetSize];
-            logProbKT = 0;
-            logProbWeighted = 0;
+        }
+
+        /// <summary>
+        /// Returns the KT-estimated log-probability of the symbol before updating counts.
+        /// KT estimator: P(s) = (n_s + 0.5) / (n + K/2)
+        /// </summary>
+        public double UpdateKT(int symbol)
+        {
+            double prob = (counts[symbol] + 0.5) / (totalCount + alphabetSize / 2.0);
+            double logProb = Math.Log(prob);
+
+            logProbKT += logProb;
+            counts[symbol]++;
+            totalCount++;
+
+            return logProb;
+        }
+
+        public CtwNode GetOrCreateChild(int symbol)
+        {
+            children ??= new CtwNode[alphabetSize];
+            return children[symbol] ??= new CtwNode(alphabetSize);
         }
     }
 
