@@ -20,7 +20,6 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Evaluators
 
             int windowSize = tuning.CtwMaxDepth;
             double sum = 0;
-            int count = 0;
 
             for (int i = 0; i < windowSize; i++)
             {
@@ -33,13 +32,10 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Evaluators
                     continue;
 
                 sum += ((OsuDifficultyHitObject)obj).CtwSurprise;
-                count++;
             }
 
-            if (count == 0)
-                return 0;
-
-            return sum / count;
+            // Divide by full window size, not count — missing context is treated as simple (0 surprise)
+            return sum / windowSize;
         }
     }
 }
