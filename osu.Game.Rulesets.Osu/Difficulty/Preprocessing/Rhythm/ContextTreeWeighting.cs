@@ -42,6 +42,43 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             children ??= new CtwNode[alphabetSize];
             return children[symbol] ??= new CtwNode(alphabetSize);
         }
+
+        // Recomputes weighted probability mixing KT estimate with children's predictions.
+        // At leaf depth the KT estimate is used directly; at internal nodes we average
+        // the KT estimate with the product of children's weighted probabilities.
+        public void RecomputeWeighted(bool isLeaf)
+        {
+            if (isLeaf)
+            {
+                logProbWeighted = logProbKT;
+                return;
+            }
+
+            double logProbChildren = 0;
+
+            if (children != null)
+            {
+                foreach (var child in children)
+                {
+                    if (child != null)
+                        logProbChildren += child.logProbWeighted;
+                }
+            }
+
+            logProbWeighted = Math.Log(0.5) + logSumExp(logProbKT, logProbChildren);
+        }
+
+        public double LogProbWeighted => logProbWeighted;
+
+        private static double logSumExp(double a, double b)
+        {
+            double max = Math.Max(a, b);
+
+            if (double.IsNegativeInfinity(max))
+                return double.NegativeInfinity;
+
+            return max + Math.Log(Math.Exp(a - max) + Math.Exp(b - max));
+        }
     }
 
     public class ContextTreeWeighting
