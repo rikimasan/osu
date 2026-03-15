@@ -35,7 +35,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Evaluators
             }
 
             // Divide by full window size, not count — missing context is treated as simple (0 surprise)
-            return sum / windowSize;
+            return tuning.CtwSurpriseScale * sum / windowSize;
         }
     }
 }

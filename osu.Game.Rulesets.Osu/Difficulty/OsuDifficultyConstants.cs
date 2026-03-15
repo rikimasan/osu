@@ -66,7 +66,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty
 
         // CTW rhythm preprocessor constants
         public int CtwMaxDepth { get; init; } = 8; // structural — how far back the model looks
-        public double CtwSurpriseScale { get; init; } = 0.15; // balancing — scales surprise contribution to rhythm multiplier
+        public double CtwSurpriseScale { get; init; } = 100.0; // balancing — scales surprise contribution to rhythm multiplier
         public double CtwEpsilonFactor { get; init; } = 0.3; // balancing — fraction of OD window that snaps ratios to 1:1
         public int CtwBinCount { get; init; } = 15; // structural — number of log-ratio bins
 
