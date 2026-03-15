@@ -137,37 +137,44 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
         private static List<List<OsuDifficultyHitObject>> buildClusters(List<OsuDifficultyHitObject> notes, OsuDifficultyConstants tuning)
         {
             var clusters = new List<List<OsuDifficultyHitObject>>();
-            var cluster = new List<OsuDifficultyHitObject> { notes[0] };
-            double firstInternalDelta = 0;
 
-            for (int i = 1; i < notes.Count; i++)
+            if (notes.Count == 0)
+                return clusters;
+
+            int lastCovered = -1;
+
+            for (int i = 1; i < notes.Count;)
             {
                 double delta = Math.Max(notes[i].DeltaTime, 1e-7);
-                double epsilon = cluster[0].HitWindow(HitResult.Great) * tuning.CtwEpsilonFactor;
+                double epsilon = notes[i].HitWindow(HitResult.Great) * tuning.CtwEpsilonFactor;
 
-                bool joinCluster;
+                int end = i;
 
-                if (cluster.Count == 1)
-                    joinCluster = Math.Abs(delta - Math.Max(cluster[0].DeltaTime, 1e-7)) < epsilon;
-                else
-                    joinCluster = Math.Abs(delta - firstInternalDelta) < epsilon;
+                while (end + 1 < notes.Count && Math.Abs(Math.Max(notes[end + 1].DeltaTime, 1e-7) - delta) < epsilon)
+                    end++;
 
-                if (joinCluster)
+                if (end > i)
                 {
-                    cluster.Add(notes[i]);
+                    // Emit singlets for uncovered notes before this cluster.
+                    for (int k = Math.Max(lastCovered + 1, 0); k < i - 1; k++)
+                        clusters.Add(new List<OsuDifficultyHitObject> { notes[k] });
 
-                    if (cluster.Count == 2)
-                        firstInternalDelta = delta;
-                }
-                else
-                {
+                    var cluster = new List<OsuDifficultyHitObject>();
+
+                    for (int j = i - 1; j <= end; j++)
+                        cluster.Add(notes[j]);
+
                     clusters.Add(cluster);
-                    cluster = new List<OsuDifficultyHitObject> { notes[i] };
-                    firstInternalDelta = 0;
+                    lastCovered = end;
                 }
+
+                i = end + 1;
             }
 
-            clusters.Add(cluster);
+            // Emit singlets for remaining uncovered notes.
+            for (int k = Math.Max(lastCovered + 1, 0); k < notes.Count; k++)
+                clusters.Add(new List<OsuDifficultyHitObject> { notes[k] });
+
             return clusters;
         }
     }
