@@ -56,5 +56,42 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 
             return notes;
         }
+
+        private static List<List<OsuDifficultyHitObject>> buildClusters(List<OsuDifficultyHitObject> notes, OsuDifficultyConstants tuning)
+        {
+            var clusters = new List<List<OsuDifficultyHitObject>>();
+            var cluster = new List<OsuDifficultyHitObject> { notes[0] };
+            double firstInternalDelta = 0;
+
+            for (int i = 1; i < notes.Count; i++)
+            {
+                double delta = Math.Max(notes[i].DeltaTime, 1e-7);
+                double epsilon = cluster[0].HitWindow(HitResult.Great) * tuning.CtwEpsilonFactor;
+
+                bool joinCluster;
+
+                if (cluster.Count == 1)
+                    joinCluster = delta < Math.Max(cluster[0].DeltaTime, 1e-7) - epsilon;
+                else
+                    joinCluster = Math.Abs(delta - firstInternalDelta) < epsilon;
+
+                if (joinCluster)
+                {
+                    cluster.Add(notes[i]);
+
+                    if (cluster.Count == 2)
+                        firstInternalDelta = delta;
+                }
+                else
+                {
+                    clusters.Add(cluster);
+                    cluster = new List<OsuDifficultyHitObject> { notes[i] };
+                    firstInternalDelta = 0;
+                }
+            }
+
+            clusters.Add(cluster);
+            return clusters;
+        }
     }
 }
