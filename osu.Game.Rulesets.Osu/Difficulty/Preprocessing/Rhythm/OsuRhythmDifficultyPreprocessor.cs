@@ -4,7 +4,6 @@
 using System;
 using System.Collections.Generic;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
-using osu.Game.Rulesets.Difficulty.Utils;
 using osu.Game.Rulesets.Osu.Objects;
 using osu.Game.Rulesets.Scoring;
 
@@ -19,26 +18,27 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             if (notes.Count == 0)
                 return;
 
-            var ctw = new ContextTreeWeighting(tuning.CtwMaxDepth, RhythmSymbolQuantizer.ALPHABET_SIZE);
-            double logK = Math.Log(RhythmSymbolQuantizer.ALPHABET_SIZE);
+            var clusters = buildClusters(notes, tuning);
 
-            for (int i = 0; i < notes.Count; i++)
+            var ctw = new ContextTreeWeighting(tuning.CtwMaxDepth, RhythmSymbolQuantizer.RATIO_BIN_COUNT);
+            double logK = Math.Log(RhythmSymbolQuantizer.RATIO_BIN_COUNT);
+            double prevGap = 0;
+
+            foreach (var cluster in clusters)
             {
-                var currObj = notes[i];
+                double gap = Math.Max(cluster[0].DeltaTime, 1e-7);
+                double epsilon = cluster[0].HitWindow(HitResult.Great) * tuning.CtwEpsilonFactor;
 
-                double currDelta = Math.Max(currObj.DeltaTime, 1e-7);
-                double prevDelta = i > 0 ? Math.Max(notes[i - 1].DeltaTime, 1e-7) : currDelta;
+                int gapSym = RhythmSymbolQuantizer.QuantizeRatio(gap, prevGap > 0 ? prevGap : gap, epsilon);
+                double surprise = ctw.Update(gapSym);
 
-                double epsilon = currObj.HitWindow(HitResult.Great) * tuning.CtwEpsilonFactor;
+                cluster[0].CtwSurprise = surprise / logK;
+                cluster[0].ClusterSize = cluster.Count;
 
-                var nextObj = i + 1 < notes.Count ? notes[i + 1] : null;
-                double doubletapness = currObj.GetDoubletapness(nextObj);
+                for (int j = 1; j < cluster.Count; j++)
+                    cluster[j].CtwSurprise = 0;
 
-                int symbol = RhythmSymbolQuantizer.Quantize(currDelta, prevDelta, epsilon, doubletapness, tuning.CtwDoubletapThreshold);
-
-                double surprise = ctw.Update(symbol);
-
-                currObj.CtwSurprise = DifficultyCalculationUtils.Smoothstep(surprise / logK, 0.05, 0.8);
+                prevGap = gap;
             }
         }
 
