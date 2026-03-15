@@ -20,19 +20,35 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 
             var clusters = buildClusters(notes, tuning);
 
+            double[] paritySurprises = scoreParity(clusters, tuning);
             double[] gapSurprises = scoreGapRatio(clusters, tuning);
 
             for (int i = 0; i < clusters.Count; i++)
             {
                 var cluster = clusters[i];
 
-                cluster[0].CtwSurprise = gapSurprises[i];
+                cluster[0].CtwSurprise = paritySurprises[i] + gapSurprises[i];
+                cluster[0].CtwParitySurprise = paritySurprises[i];
                 cluster[0].CtwGapSurprise = gapSurprises[i];
                 cluster[0].ClusterSize = cluster.Count;
 
                 for (int j = 1; j < cluster.Count; j++)
                     cluster[j].CtwSurprise = 0;
             }
+        }
+
+        private static double[] scoreParity(List<List<OsuDifficultyHitObject>> clusters, OsuDifficultyConstants tuning)
+        {
+            var ctw = new ContextTreeWeighting(tuning.CtwMaxDepth, 2);
+            var surprises = new double[clusters.Count];
+
+            for (int i = 0; i < clusters.Count; i++)
+            {
+                int sym = clusters[i].Count % 2;
+                surprises[i] = ctw.Update(sym);
+            }
+
+            return surprises;
         }
 
         private static double[] scoreGapRatio(List<List<OsuDifficultyHitObject>> clusters, OsuDifficultyConstants tuning)
