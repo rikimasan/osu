@@ -68,7 +68,6 @@ namespace osu.Game.Rulesets.Osu.Difficulty
         public int CtwMaxDepth { get; init; } = 8; // structural — how far back the model looks
         public double CtwSurpriseScale { get; init; } = 0.15; // balancing — scales surprise contribution to rhythm multiplier
         public double CtwEpsilonFactor { get; init; } = 0.3; // balancing — fraction of OD window that snaps ratios to 1:1
-        public double CtwDoubletapThreshold { get; init; } = 0.5; // balancing — doubletapness above this triggers DTAP symbol
         public int CtwBinCount { get; init; } = 15; // structural — number of log-ratio bins
 
 

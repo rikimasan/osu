@@ -10,9 +10,6 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
         // 15 ratio bins evenly spaced in log-space from ln(1/16) to ln(16/1).
         // Covers all beat snap divisor ratios {1..9, 12, 16}.
         public const int RATIO_BIN_COUNT = 15;
-        public const int DTAP_SYMBOL = 15;
-        public const int ALPHABET_SIZE = 16;
-
         private static readonly double log_ratio_min = Math.Log(1.0 / 16.0);
         private static readonly double log_ratio_max = Math.Log(16.0);
         private static readonly double bin_width = (log_ratio_max - log_ratio_min) / RATIO_BIN_COUNT;
@@ -20,18 +17,6 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
         // Center bin index (ratio ≈ 1.0)
         private const int center_bin = RATIO_BIN_COUNT / 2;
 
-        public static int Quantize(double currDelta, double prevDelta, double epsilon, double doubletapness, double doubletapThreshold)
-        {
-            // Doubletappable notes get their own symbol so the model treats them distinctly
-            if (doubletapness > doubletapThreshold)
-                return DTAP_SYMBOL;
-
-            return QuantizeRatio(currDelta, prevDelta, epsilon);
-        }
-
-        /// <summary>
-        /// Pure ratio binning without doubletap handling. Used by the cluster-based preprocessor.
-        /// </summary>
         public static int QuantizeRatio(double currDelta, double prevDelta, double epsilon)
         {
             // Deltas within the OD hit window are indistinguishable — snap to center
