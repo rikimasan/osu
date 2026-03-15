@@ -26,6 +26,14 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             if (doubletapness > doubletapThreshold)
                 return DTAP_SYMBOL;
 
+            return QuantizeRatio(currDelta, prevDelta, epsilon);
+        }
+
+        /// <summary>
+        /// Pure ratio binning without doubletap handling. Used by the cluster-based preprocessor.
+        /// </summary>
+        public static int QuantizeRatio(double currDelta, double prevDelta, double epsilon)
+        {
             // Deltas within the OD hit window are indistinguishable — snap to center
             if (Math.Abs(currDelta - prevDelta) < epsilon)
                 return center_bin;
