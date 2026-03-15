@@ -22,14 +22,16 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 
             double[] paritySurprises = scoreParity(clusters, tuning);
             double[] gapSurprises = scoreGapRatio(clusters, tuning);
+            double[] internalSurprises = scoreInternalRatio(clusters, tuning);
 
             for (int i = 0; i < clusters.Count; i++)
             {
                 var cluster = clusters[i];
 
-                cluster[0].CtwSurprise = paritySurprises[i] + gapSurprises[i];
+                cluster[0].CtwSurprise = paritySurprises[i] + gapSurprises[i] + internalSurprises[i];
                 cluster[0].CtwParitySurprise = paritySurprises[i];
                 cluster[0].CtwGapSurprise = gapSurprises[i];
+                cluster[0].CtwInternalSurprise = internalSurprises[i];
                 cluster[0].ClusterSize = cluster.Count;
 
                 for (int j = 1; j < cluster.Count; j++)
@@ -69,6 +71,46 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             }
 
             return surprises;
+        }
+
+        private static double[] scoreInternalRatio(List<List<OsuDifficultyHitObject>> clusters, OsuDifficultyConstants tuning)
+        {
+            var ctw = new ContextTreeWeighting(tuning.CtwMaxDepth, RhythmSymbolQuantizer.RATIO_BIN_COUNT);
+            var surprises = new double[clusters.Count];
+            double prevInternalDelta = 0;
+
+            for (int i = 0; i < clusters.Count; i++)
+            {
+                var cluster = clusters[i];
+                double internalDelta = cluster.Count > 1 ? averageInternalDelta(cluster) : 0;
+
+                int sym;
+
+                if (cluster.Count <= 1 || prevInternalDelta <= 0)
+                    sym = RhythmSymbolQuantizer.RATIO_BIN_COUNT / 2;
+                else
+                {
+                    double epsilon = cluster[0].HitWindow(HitResult.Great) * tuning.CtwEpsilonFactor;
+                    sym = RhythmSymbolQuantizer.QuantizeRatio(internalDelta, prevInternalDelta, epsilon);
+                }
+
+                surprises[i] = ctw.Update(sym);
+
+                if (cluster.Count > 1)
+                    prevInternalDelta = internalDelta;
+            }
+
+            return surprises;
+        }
+
+        private static double averageInternalDelta(List<OsuDifficultyHitObject> cluster)
+        {
+            double sum = 0;
+
+            for (int i = 1; i < cluster.Count; i++)
+                sum += Math.Max(cluster[i].DeltaTime, 1e-7);
+
+            return sum / (cluster.Count - 1);
         }
 
         private static List<OsuDifficultyHitObject> collectNotes(List<DifficultyHitObject> objects)
