@@ -61,7 +61,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 
             for (int i = 0; i < clusters.Count; i++)
             {
-                double gap = Math.Max(clusters[i][0].DeltaTime, 1e-7);
+                double gap = Math.Max(clusters[i][0].LastObjectEndDeltaTime, 1e-7);
                 double epsilon = clusters[i][0].HitWindow(HitResult.Great) * tuning.CtwEpsilonFactor;
 
                 int sym = RhythmSymbolQuantizer.QuantizeRatio(gap, prevGap > 0 ? prevGap : gap, epsilon);
