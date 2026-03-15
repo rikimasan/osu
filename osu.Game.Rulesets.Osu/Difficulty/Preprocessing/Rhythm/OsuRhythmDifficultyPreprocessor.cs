@@ -20,26 +20,39 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 
             var clusters = buildClusters(notes, tuning);
 
-            var ctw = new ContextTreeWeighting(tuning.CtwMaxDepth, RhythmSymbolQuantizer.RATIO_BIN_COUNT);
-            double logK = Math.Log(RhythmSymbolQuantizer.RATIO_BIN_COUNT);
-            double prevGap = 0;
+            double[] gapSurprises = scoreGapRatio(clusters, tuning);
 
-            foreach (var cluster in clusters)
+            for (int i = 0; i < clusters.Count; i++)
             {
-                double gap = Math.Max(cluster[0].DeltaTime, 1e-7);
-                double epsilon = cluster[0].HitWindow(HitResult.Great) * tuning.CtwEpsilonFactor;
+                var cluster = clusters[i];
 
-                int gapSym = RhythmSymbolQuantizer.QuantizeRatio(gap, prevGap > 0 ? prevGap : gap, epsilon);
-                double surprise = ctw.Update(gapSym);
-
-                cluster[0].CtwSurprise = surprise / logK;
+                cluster[0].CtwSurprise = gapSurprises[i];
+                cluster[0].CtwGapSurprise = gapSurprises[i];
                 cluster[0].ClusterSize = cluster.Count;
 
                 for (int j = 1; j < cluster.Count; j++)
                     cluster[j].CtwSurprise = 0;
+            }
+        }
+
+        private static double[] scoreGapRatio(List<List<OsuDifficultyHitObject>> clusters, OsuDifficultyConstants tuning)
+        {
+            var ctw = new ContextTreeWeighting(tuning.CtwMaxDepth, RhythmSymbolQuantizer.RATIO_BIN_COUNT);
+            var surprises = new double[clusters.Count];
+            double prevGap = 0;
+
+            for (int i = 0; i < clusters.Count; i++)
+            {
+                double gap = Math.Max(clusters[i][0].DeltaTime, 1e-7);
+                double epsilon = clusters[i][0].HitWindow(HitResult.Great) * tuning.CtwEpsilonFactor;
+
+                int sym = RhythmSymbolQuantizer.QuantizeRatio(gap, prevGap > 0 ? prevGap : gap, epsilon);
+                surprises[i] = ctw.Update(sym);
 
                 prevGap = gap;
             }
+
+            return surprises;
         }
 
         private static List<OsuDifficultyHitObject> collectNotes(List<DifficultyHitObject> objects)
