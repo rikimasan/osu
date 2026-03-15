@@ -37,6 +37,12 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
                 for (int j = 1; j < cluster.Count; j++)
                     cluster[j].CtwSurprise = 0;
             }
+
+            for (int i = 0; i < clusters.Count; i++)
+            {
+                foreach (var note in clusters[i])
+                    note.ClusterIndices.Add(i);
+            }
         }
 
         private static double[] scoreParity(List<List<OsuDifficultyHitObject>> clusters, OsuDifficultyConstants tuning)

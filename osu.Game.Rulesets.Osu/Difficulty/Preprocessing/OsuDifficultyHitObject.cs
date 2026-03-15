@@ -134,6 +134,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing
         public double CtwGapSurprise { get; internal set; }
         public double CtwInternalSurprise { get; internal set; }
         public int ClusterSize { get; internal set; }
+        public List<int> ClusterIndices { get; } = new List<int>();
 
         private readonly OsuDifficultyHitObject? lastLastDifficultyObject;
         private readonly OsuDifficultyHitObject? lastDifficultyObject;
