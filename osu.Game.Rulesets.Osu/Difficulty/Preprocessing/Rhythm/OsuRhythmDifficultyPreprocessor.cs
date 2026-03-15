@@ -142,7 +142,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
                 bool joinCluster;
 
                 if (cluster.Count == 1)
-                    joinCluster = delta < Math.Max(cluster[0].DeltaTime, 1e-7) - epsilon;
+                    joinCluster = Math.Abs(delta - Math.Max(cluster[0].DeltaTime, 1e-7)) < epsilon;
                 else
                     joinCluster = Math.Abs(delta - firstInternalDelta) < epsilon;
 
