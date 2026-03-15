@@ -130,6 +130,10 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing
         public double SmallCircleBonus { get; private set; }
 
         public double CtwSurprise { get; internal set; }
+        public double CtwParitySurprise { get; internal set; }
+        public double CtwGapSurprise { get; internal set; }
+        public double CtwInternalSurprise { get; internal set; }
+        public int ClusterSize { get; internal set; }
 
         private readonly OsuDifficultyHitObject? lastLastDifficultyObject;
         private readonly OsuDifficultyHitObject? lastDifficultyObject;
