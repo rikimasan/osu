@@ -42,22 +42,10 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 
             for (int i = 0; i < clusters.Count; i++)
             {
-                var cluster = clusters[i];
+                var data = new RhythmClusterData(i, clusters[i].Count, paritySurprises[i], gapSurprises[i], internalSurprises[i]);
 
-                cluster[0].Source.CtwSurprise = paritySurprises[i] + gapSurprises[i] + internalSurprises[i];
-                cluster[0].Source.CtwParitySurprise = paritySurprises[i];
-                cluster[0].Source.CtwGapSurprise = gapSurprises[i];
-                cluster[0].Source.CtwInternalSurprise = internalSurprises[i];
-                cluster[0].Source.ClusterSize = cluster.Count;
-
-                for (int j = 1; j < cluster.Count; j++)
-                    cluster[j].Source.CtwSurprise = 0;
-            }
-
-            for (int i = 0; i < clusters.Count; i++)
-            {
                 foreach (var evt in clusters[i])
-                    evt.Source.ClusterIndices.Add(i);
+                    evt.Source.RhythmClusters.Add(data);
             }
         }
 

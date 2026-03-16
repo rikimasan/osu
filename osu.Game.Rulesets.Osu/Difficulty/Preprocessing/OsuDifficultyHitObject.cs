@@ -7,6 +7,7 @@ using System.Linq;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Osu.Mods;
+using osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm;
 using osu.Game.Rulesets.Osu.Objects;
 using osu.Game.Rulesets.Scoring;
 using osuTK;
@@ -129,12 +130,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing
         /// </summary>
         public double SmallCircleBonus { get; private set; }
 
-        public double CtwSurprise { get; internal set; }
-        public double CtwParitySurprise { get; internal set; }
-        public double CtwGapSurprise { get; internal set; }
-        public double CtwInternalSurprise { get; internal set; }
-        public int ClusterSize { get; internal set; }
-        public List<int> ClusterIndices { get; } = new List<int>();
+        public List<RhythmClusterData> RhythmClusters { get; } = new List<RhythmClusterData>();
 
         private readonly OsuDifficultyHitObject? lastLastDifficultyObject;
         private readonly OsuDifficultyHitObject? lastDifficultyObject;
