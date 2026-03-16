@@ -11,14 +11,30 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 {
     public static class OsuRhythmDifficultyPreprocessor
     {
+        private readonly struct RhythmEvent
+        {
+            public readonly double Time;
+            public readonly double Delta;
+            public readonly double HitWindow;
+            public readonly OsuDifficultyHitObject Source;
+
+            public RhythmEvent(double time, double delta, double hitWindow, OsuDifficultyHitObject source)
+            {
+                Time = time;
+                Delta = delta;
+                HitWindow = hitWindow;
+                Source = source;
+            }
+        }
+
         public static void ProcessAndAssign(List<DifficultyHitObject> objects, OsuDifficultyConstants tuning)
         {
-            var notes = collectNotes(objects);
+            var events = collectEvents(objects);
 
-            if (notes.Count == 0)
+            if (events.Count == 0)
                 return;
 
-            var clusters = buildClusters(notes, tuning);
+            var clusters = buildClusters(events, tuning);
 
             double[] paritySurprises = scoreParity(clusters, tuning);
             double[] gapSurprises = scoreGapRatio(clusters, tuning);
@@ -28,24 +44,24 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             {
                 var cluster = clusters[i];
 
-                cluster[0].CtwSurprise = paritySurprises[i] + gapSurprises[i] + internalSurprises[i];
-                cluster[0].CtwParitySurprise = paritySurprises[i];
-                cluster[0].CtwGapSurprise = gapSurprises[i];
-                cluster[0].CtwInternalSurprise = internalSurprises[i];
-                cluster[0].ClusterSize = cluster.Count;
+                cluster[0].Source.CtwSurprise = paritySurprises[i] + gapSurprises[i] + internalSurprises[i];
+                cluster[0].Source.CtwParitySurprise = paritySurprises[i];
+                cluster[0].Source.CtwGapSurprise = gapSurprises[i];
+                cluster[0].Source.CtwInternalSurprise = internalSurprises[i];
+                cluster[0].Source.ClusterSize = cluster.Count;
 
                 for (int j = 1; j < cluster.Count; j++)
-                    cluster[j].CtwSurprise = 0;
+                    cluster[j].Source.CtwSurprise = 0;
             }
 
             for (int i = 0; i < clusters.Count; i++)
             {
-                foreach (var note in clusters[i])
-                    note.ClusterIndices.Add(i);
+                foreach (var evt in clusters[i])
+                    evt.Source.ClusterIndices.Add(i);
             }
         }
 
-        private static double[] scoreParity(List<List<OsuDifficultyHitObject>> clusters, OsuDifficultyConstants tuning)
+        private static double[] scoreParity(List<List<RhythmEvent>> clusters, OsuDifficultyConstants tuning)
         {
             var ctw = new ContextTreeWeighting(tuning.CtwMaxDepth, 2);
             var surprises = new double[clusters.Count];
@@ -59,7 +75,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             return surprises;
         }
 
-        private static double[] scoreGapRatio(List<List<OsuDifficultyHitObject>> clusters, OsuDifficultyConstants tuning)
+        private static double[] scoreGapRatio(List<List<RhythmEvent>> clusters, OsuDifficultyConstants tuning)
         {
             var ctw = new ContextTreeWeighting(tuning.CtwMaxDepth, RhythmSymbolQuantizer.RATIO_BIN_COUNT);
             var surprises = new double[clusters.Count];
@@ -67,8 +83,8 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 
             for (int i = 0; i < clusters.Count; i++)
             {
-                double gap = Math.Max(clusters[i][0].LastObjectEndDeltaTime, 1e-7);
-                double epsilon = clusters[i][0].HitWindow(HitResult.Great) * tuning.CtwEpsilonFactor;
+                double gap = Math.Max(clusters[i][0].Source.LastObjectEndDeltaTime, 1e-7);
+                double epsilon = clusters[i][0].HitWindow * tuning.CtwEpsilonFactor;
 
                 int sym = RhythmSymbolQuantizer.QuantizeRatio(gap, prevGap > 0 ? prevGap : gap, epsilon);
                 surprises[i] = ctw.Update(sym);
@@ -79,7 +95,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             return surprises;
         }
 
-        private static double[] scoreInternalRatio(List<List<OsuDifficultyHitObject>> clusters, OsuDifficultyConstants tuning)
+        private static double[] scoreInternalRatio(List<List<RhythmEvent>> clusters, OsuDifficultyConstants tuning)
         {
             var ctw = new ContextTreeWeighting(tuning.CtwMaxDepth, RhythmSymbolQuantizer.RATIO_BIN_COUNT);
             var surprises = new double[clusters.Count];
@@ -96,7 +112,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
                     sym = RhythmSymbolQuantizer.RATIO_BIN_COUNT / 2;
                 else
                 {
-                    double epsilon = cluster[0].HitWindow(HitResult.Great) * tuning.CtwEpsilonFactor;
+                    double epsilon = cluster[0].HitWindow * tuning.CtwEpsilonFactor;
                     sym = RhythmSymbolQuantizer.QuantizeRatio(internalDelta, prevInternalDelta, epsilon);
                 }
 
@@ -109,60 +125,62 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             return surprises;
         }
 
-        private static double averageInternalDelta(List<OsuDifficultyHitObject> cluster)
+        private static double averageInternalDelta(List<RhythmEvent> cluster)
         {
             double sum = 0;
 
             for (int i = 1; i < cluster.Count; i++)
-                sum += Math.Max(cluster[i].DeltaTime, 1e-7);
+                sum += Math.Max(cluster[i].Delta, 1e-7);
 
             return sum / (cluster.Count - 1);
         }
 
-        private static List<OsuDifficultyHitObject> collectNotes(List<DifficultyHitObject> objects)
+        private static List<RhythmEvent> collectEvents(List<DifficultyHitObject> objects)
         {
-            var notes = new List<OsuDifficultyHitObject>();
+            var events = new List<RhythmEvent>();
 
             for (int i = 0; i < objects.Count; i++)
             {
                 var obj = (OsuDifficultyHitObject)objects[i];
 
-                if (obj.BaseObject is not Spinner)
-                    notes.Add(obj);
+                if (obj.BaseObject is Spinner)
+                    continue;
+
+                double hitWindow = obj.HitWindow(HitResult.Great);
+                events.Add(new RhythmEvent(obj.StartTime, obj.DeltaTime, hitWindow, obj));
             }
 
-            return notes;
+            return events;
         }
 
-        private static List<List<OsuDifficultyHitObject>> buildClusters(List<OsuDifficultyHitObject> notes, OsuDifficultyConstants tuning)
+        private static List<List<RhythmEvent>> buildClusters(List<RhythmEvent> events, OsuDifficultyConstants tuning)
         {
-            var clusters = new List<List<OsuDifficultyHitObject>>();
+            var clusters = new List<List<RhythmEvent>>();
 
-            if (notes.Count == 0)
+            if (events.Count == 0)
                 return clusters;
 
             int lastCovered = -1;
 
-            for (int i = 1; i < notes.Count;)
+            for (int i = 1; i < events.Count;)
             {
-                double delta = Math.Max(notes[i].DeltaTime, 1e-7);
-                double epsilon = notes[i].HitWindow(HitResult.Great) * tuning.CtwEpsilonFactor;
+                double delta = Math.Max(events[i].Delta, 1e-7);
+                double epsilon = events[i].HitWindow * tuning.CtwEpsilonFactor;
 
                 int end = i;
 
-                while (end + 1 < notes.Count && Math.Abs(Math.Max(notes[end + 1].DeltaTime, 1e-7) - delta) < epsilon)
+                while (end + 1 < events.Count && Math.Abs(Math.Max(events[end + 1].Delta, 1e-7) - delta) < epsilon)
                     end++;
 
                 if (end > i)
                 {
-                    // Emit singlets for uncovered notes before this cluster.
                     for (int k = Math.Max(lastCovered + 1, 0); k < i - 1; k++)
-                        clusters.Add(new List<OsuDifficultyHitObject> { notes[k] });
+                        clusters.Add(new List<RhythmEvent> { events[k] });
 
-                    var cluster = new List<OsuDifficultyHitObject>();
+                    var cluster = new List<RhythmEvent>();
 
                     for (int j = i - 1; j <= end; j++)
-                        cluster.Add(notes[j]);
+                        cluster.Add(events[j]);
 
                     clusters.Add(cluster);
                     lastCovered = end;
@@ -171,9 +189,8 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
                 i = end + 1;
             }
 
-            // Emit singlets for remaining uncovered notes.
-            for (int k = Math.Max(lastCovered + 1, 0); k < notes.Count; k++)
-                clusters.Add(new List<OsuDifficultyHitObject> { notes[k] });
+            for (int k = Math.Max(lastCovered + 1, 0); k < events.Count; k++)
+                clusters.Add(new List<RhythmEvent> { events[k] });
 
             return clusters;
         }
