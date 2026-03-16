@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using osu.Game.Rulesets.Difficulty.Preprocessing;
+using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Osu.Objects;
 using osu.Game.Rulesets.Scoring;
 
@@ -16,9 +17,9 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             public readonly double Time;
             public readonly double Delta;
             public readonly double HitWindow;
-            public readonly OsuDifficultyHitObject Source;
+            public readonly OsuDifficultyHitObject? Source;
 
-            public RhythmEvent(double time, double delta, double hitWindow, OsuDifficultyHitObject source)
+            public RhythmEvent(double time, double delta, double hitWindow, OsuDifficultyHitObject? source)
             {
                 Time = time;
                 Delta = delta;
@@ -45,7 +46,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
                 var data = new RhythmClusterData(i, clusters[i].Count, paritySurprises[i], gapSurprises[i], internalSurprises[i]);
 
                 foreach (var evt in clusters[i])
-                    evt.Source.RhythmClusters.Add(data);
+                    evt.Source?.RhythmClusters.Add(data);
             }
         }
 
@@ -71,7 +72,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 
             for (int i = 0; i < clusters.Count; i++)
             {
-                double gap = Math.Max(clusters[i][0].Source.LastObjectEndDeltaTime, 1e-7);
+                double gap = Math.Max(clusters[i][0].Delta, 1e-7);
                 double epsilon = clusters[i][0].HitWindow * tuning.CtwEpsilonFactor;
 
                 int sym = RhythmSymbolQuantizer.QuantizeRatio(gap, prevGap > 0 ? prevGap : gap, epsilon);
@@ -126,6 +127,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
         private static List<RhythmEvent> collectEvents(List<DifficultyHitObject> objects)
         {
             var events = new List<RhythmEvent>();
+            double prevTime = 0;
 
             for (int i = 0; i < objects.Count; i++)
             {
@@ -134,8 +136,25 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
                 if (obj.BaseObject is Spinner)
                     continue;
 
+                double hitTime = obj.StartTime;
                 double hitWindow = obj.HitWindow(HitResult.Great);
-                events.Add(new RhythmEvent(obj.StartTime, obj.DeltaTime, hitWindow, obj));
+
+                events.Add(new RhythmEvent(hitTime, hitTime - prevTime, hitWindow, obj));
+                prevTime = hitTime;
+
+                if (obj.BaseObject is Slider slider)
+                {
+                    double releaseTime = Math.Max(
+                        slider.StartTime + slider.Duration + SliderEventGenerator.TAIL_LENIENCY,
+                        slider.StartTime + slider.Duration / 2);
+
+                    if (releaseTime > hitTime)
+                    {
+                        double tailTime = obj.EndTime;
+                        events.Add(new RhythmEvent(tailTime, tailTime - prevTime, hitWindow, null));
+                        prevTime = tailTime;
+                    }
+                }
             }
 
             return events;
