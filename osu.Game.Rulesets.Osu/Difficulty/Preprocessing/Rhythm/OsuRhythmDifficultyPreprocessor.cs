@@ -171,12 +171,18 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 
             for (int i = 1; i < events.Count;)
             {
+                if (events[i].Source == null)
+                {
+                    i++;
+                    continue;
+                }
+
                 double delta = Math.Max(events[i].Delta, 1e-7);
                 double epsilon = events[i].HitWindow * tuning.CtwEpsilonFactor;
 
                 int end = i;
 
-                while (end + 1 < events.Count && Math.Abs(Math.Max(events[end + 1].Delta, 1e-7) - delta) < epsilon)
+                while (end + 1 < events.Count && events[end + 1].Source != null && Math.Abs(Math.Max(events[end + 1].Delta, 1e-7) - delta) < epsilon)
                     end++;
 
                 if (end > i)
