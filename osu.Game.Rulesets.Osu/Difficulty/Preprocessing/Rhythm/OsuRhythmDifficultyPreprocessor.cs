@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+
 using osu.Game.Rulesets.Difficulty.Preprocessing;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Osu.Objects;
@@ -43,7 +44,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 
             for (int i = 0; i < clusters.Count; i++)
             {
-                var data = new RhythmClusterData(i, clusters[i].Count, paritySurprises[i], gapSurprises[i], internalSurprises[i]);
+                var data = new RhythmClusterData(i, clusters[i].Count, clusters[i][0].Time, clusters[i][^1].Time, paritySurprises[i], gapSurprises[i], internalSurprises[i]);
 
                 foreach (var evt in clusters[i])
                     evt.Source?.RhythmClusters.Add(data);
@@ -205,7 +206,29 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             for (int k = Math.Max(lastCovered + 1, 0); k < events.Count; k++)
                 clusters.Add(new List<RhythmEvent> { events[k] });
 
+            mergeDoubles(clusters);
+
             return clusters;
+        }
+        private static void mergeDoubles(List<List<RhythmEvent>> clusters)
+        {
+            for (int i = 1; i < clusters.Count - 1; i++)
+            {
+                if (clusters[i].Count != 1)
+                    continue;
+
+                double epsilon = clusters[i][0].HitWindow;
+                double prev = clusters[i - 1][^1].Delta;
+                double curr = clusters[i][0].Delta;
+                double next = clusters[i + 1][0].Delta;
+
+                if (prev > curr + epsilon && next > curr + epsilon)
+                {
+                    clusters[i - 1].Add(clusters[i][0]);
+                    clusters.RemoveAt(i);
+                    i--;
+                }
+            }
         }
     }
 }
