@@ -21,6 +21,25 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             counts = new int[alphabetSize];
         }
 
+        private CtwNode(CtwNode other)
+        {
+            alphabetSize = other.alphabetSize;
+            counts = (int[])other.counts.Clone();
+            logProbKT = other.logProbKT;
+            logProbWeighted = other.logProbWeighted;
+            totalCount = other.totalCount;
+
+            if (other.children != null)
+            {
+                children = new CtwNode?[alphabetSize];
+
+                for (int i = 0; i < alphabetSize; i++)
+                    children[i] = other.children[i]?.Clone();
+            }
+        }
+
+        public CtwNode Clone() => new CtwNode(this);
+
         /// <summary>
         /// Returns the KT-estimated log-probability of the symbol before updating counts.
         /// KT estimator: P(s) = (n_s + 0.5) / (n + K/2)
@@ -96,6 +115,17 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             root = new CtwNode(alphabetSize);
             contextBuffer = new int[maxDepth];
         }
+
+        private ContextTreeWeighting(ContextTreeWeighting other)
+        {
+            maxDepth = other.maxDepth;
+            alphabetSize = other.alphabetSize;
+            root = other.root.Clone();
+            contextBuffer = (int[])other.contextBuffer.Clone();
+            bufferCount = other.bufferCount;
+        }
+
+        public ContextTreeWeighting Clone() => new ContextTreeWeighting(this);
 
         // Returns surprise (-log P_ctw) for the symbol before updating the model.
         // Walks the context tree from root to leaf using the context buffer,
