@@ -252,21 +252,36 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
         }
         private static void mergeDoubles(List<List<RhythmEvent>> clusters)
         {
-            for (int i = 1; i < clusters.Count - 1; i++)
+            for (int i = 1; i < clusters.Count; i++)
             {
-                if (clusters[i].Count != 1)
-                    continue;
-
                 double epsilon = clusters[i][0].HitWindow;
                 double prev = clusters[i - 1][^1].Delta;
                 double curr = clusters[i][0].Delta;
-                double next = clusters[i + 1][0].Delta;
+
+                double next;
+
+                if (clusters[i].Count > 1)
+                {
+                    next = clusters[i][1].Delta;
+                }
+                else
+                {
+                    int nextIndex = i + 1;
+
+                    if (nextIndex < clusters.Count && clusters[nextIndex][0].Source == null)
+                        nextIndex++;
+
+                    if (nextIndex >= clusters.Count)
+                        continue;
+
+                    next = clusters[nextIndex][0].Time - clusters[i][0].Time;
+                }
 
                 if (prev > curr + epsilon && next > curr + epsilon)
                 {
-                    clusters[i - 1].Add(clusters[i][0]);
-                    clusters.RemoveAt(i);
-                    i--;
+                    var doublePair = new List<RhythmEvent> { clusters[i - 1][^1], clusters[i][0] };
+                    clusters.Insert(i, doublePair);
+                    i++;
                 }
             }
         }
