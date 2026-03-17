@@ -36,40 +36,7 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             if (events.Count == 0)
                 return;
 
-            var clusters = buildClusters(events, tuning);
-
-            var parityCTW = new ContextTreeWeighting(tuning.CtwMaxDepth, 2);
-            var gapCTW = new ContextTreeWeighting(tuning.CtwMaxDepth, RhythmSymbolQuantizer.RATIO_BIN_COUNT);
-            var internalCTW = new ContextTreeWeighting(tuning.CtwMaxDepth, RhythmSymbolQuantizer.RATIO_BIN_COUNT);
-
-            double prevGap = 0;
-            double prevInternalDelta = 0;
-
-            for (int i = 0; i < clusters.Count; i++)
-            {
-                var cluster = clusters[i];
-
-                double paritySurprise = parityCTW.Update(cluster.Count % 2);
-
-                double gap = Math.Max(cluster[0].Delta, 1e-7);
-                double epsilon = cluster[0].HitWindow * tuning.CtwEpsilonFactor;
-                double gapSurprise = gapCTW.Update(RhythmSymbolQuantizer.QuantizeRatio(gap, prevGap > 0 ? prevGap : gap, epsilon));
-                prevGap = gap;
-
-                double internalDelta = cluster.Count > 1 ? averageInternalDelta(cluster) : 0;
-                int internalSym = cluster.Count <= 1 || prevInternalDelta <= 0
-                    ? RhythmSymbolQuantizer.RATIO_BIN_COUNT / 2
-                    : RhythmSymbolQuantizer.QuantizeRatio(internalDelta, prevInternalDelta, epsilon);
-                double internalSurprise = internalCTW.Update(internalSym);
-
-                if (cluster.Count > 1)
-                    prevInternalDelta = internalDelta;
-
-                var data = new RhythmClusterData(i, cluster.Count, cluster[0].Time, cluster[^1].Time, paritySurprise, gapSurprise, internalSurprise);
-
-                foreach (var evt in cluster)
-                    evt.Source?.RhythmClusters.Add(data);
-            }
+            buildAndScoreClusters(events, tuning);
         }
 
         private static double averageInternalDelta(List<RhythmEvent> cluster)
@@ -118,12 +85,12 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             return events;
         }
 
-        private static List<List<RhythmEvent>> buildClusters(List<RhythmEvent> events, OsuDifficultyConstants tuning)
+        private static void buildAndScoreClusters(List<RhythmEvent> events, OsuDifficultyConstants tuning)
         {
             var clusters = new List<List<RhythmEvent>>();
 
             if (events.Count == 0)
-                return clusters;
+                return;
 
             int lastCovered = -1;
 
@@ -165,7 +132,43 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 
             mergeDoubles(clusters);
 
-            return clusters;
+            scoreClusters(clusters, tuning);
+        }
+
+        private static void scoreClusters(List<List<RhythmEvent>> clusters, OsuDifficultyConstants tuning)
+        {
+            var parityCTW = new ContextTreeWeighting(tuning.CtwMaxDepth, 2);
+            var gapCTW = new ContextTreeWeighting(tuning.CtwMaxDepth, RhythmSymbolQuantizer.RATIO_BIN_COUNT);
+            var internalCTW = new ContextTreeWeighting(tuning.CtwMaxDepth, RhythmSymbolQuantizer.RATIO_BIN_COUNT);
+
+            double prevGap = 0;
+            double prevInternalDelta = 0;
+
+            for (int i = 0; i < clusters.Count; i++)
+            {
+                var cluster = clusters[i];
+
+                double paritySurprise = parityCTW.Update(cluster.Count % 2);
+
+                double gap = Math.Max(cluster[0].Delta, 1e-7);
+                double epsilon = cluster[0].HitWindow * tuning.CtwEpsilonFactor;
+                double gapSurprise = gapCTW.Update(RhythmSymbolQuantizer.QuantizeRatio(gap, prevGap > 0 ? prevGap : gap, epsilon));
+                prevGap = gap;
+
+                double internalDelta = cluster.Count > 1 ? averageInternalDelta(cluster) : 0;
+                int internalSym = cluster.Count <= 1 || prevInternalDelta <= 0
+                    ? RhythmSymbolQuantizer.RATIO_BIN_COUNT / 2
+                    : RhythmSymbolQuantizer.QuantizeRatio(internalDelta, prevInternalDelta, epsilon);
+                double internalSurprise = internalCTW.Update(internalSym);
+
+                if (cluster.Count > 1)
+                    prevInternalDelta = internalDelta;
+
+                var data = new RhythmClusterData(i, cluster.Count, cluster[0].Time, cluster[^1].Time, paritySurprise, gapSurprise, internalSurprise);
+
+                foreach (var evt in cluster)
+                    evt.Source?.RhythmClusters.Add(data);
+            }
         }
         private static void mergeDoubles(List<List<RhythmEvent>> clusters)
         {
