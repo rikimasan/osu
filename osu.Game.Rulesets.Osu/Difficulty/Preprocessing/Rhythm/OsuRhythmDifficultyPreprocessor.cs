@@ -154,8 +154,10 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 
                     var data = new RhythmClusterData(i, chosen.count, chosen.startTime, chosen.endTime, chosen.paritySurprise, chosen.gapSurprise, chosen.internalSurprise);
 
-                    foreach (var evt in cluster)
-                        evt.Source?.RhythmClusters.Add(data);
+                    int assignStart = withoutTail.surprise <= withTail.surprise ? 1 : 0;
+
+                    for (int j = assignStart; j < cluster.Count; j++)
+                        cluster[j].Source?.RhythmClusters.Add(data);
                 }
                 else
                 {
@@ -171,6 +173,16 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
 
                     foreach (var evt in cluster)
                         evt.Source?.RhythmClusters.Add(data);
+                }
+            }
+
+            // Remove singlet entries from notes that also belong to larger clusters.
+            foreach (var cluster in clusters)
+            {
+                foreach (var evt in cluster)
+                {
+                    if (evt.Source != null && evt.Source.RhythmClusters.Count > 1)
+                        evt.Source.RhythmClusters.RemoveAll(c => c.Size == 1);
                 }
             }
         }
@@ -280,8 +292,21 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
                 if (prev > curr + epsilon && next > curr + epsilon)
                 {
                     var doublePair = new List<RhythmEvent> { clusters[i - 1][^1], clusters[i][0] };
-                    clusters.Insert(i, doublePair);
-                    i++;
+                    int prevIdx = i - 1;
+
+                    if (clusters[i].Count == 1)
+                        clusters[i] = doublePair;
+                    else
+                    {
+                        clusters.Insert(i, doublePair);
+                        i++;
+                    }
+
+                    if (clusters[prevIdx].Count == 1)
+                    {
+                        clusters.RemoveAt(prevIdx);
+                        i--;
+                    }
                 }
             }
         }
