@@ -171,6 +171,10 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
                 double contextTime = scored.endTime - scoredStartTimes[contextIdx] + scoredLeadingDeltas[contextIdx];
                 double timeScale = 1000.0 / Math.Max(contextTime, 1.0);
 
+                // Suppress clusters before the CTW context window is full.
+                if (scoredStartTimes.Count <= tuning.CtwMaxDepth)
+                    timeScale = 0;
+
                 var data = new RhythmClusterData(i, scored.count, scored.startTime, scored.endTime,
                     scored.paritySurprise * timeScale, scored.gapSurprise * timeScale, scored.internalSurprise * timeScale);
 
