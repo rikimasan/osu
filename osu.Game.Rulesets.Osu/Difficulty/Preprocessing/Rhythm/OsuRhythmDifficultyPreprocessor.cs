@@ -134,46 +134,48 @@ namespace osu.Game.Rulesets.Osu.Difficulty.Preprocessing.Rhythm
             double prevGap = 0;
             double prevInternalDelta = 0;
 
+            var scoredStartTimes = new List<double>();
+            var scoredLeadingDeltas = new List<double>();
+
             for (int i = 0; i < clusters.Count; i++)
             {
                 var cluster = clusters[i];
                 bool tailLeading = cluster.Count > 1 && cluster[0].Source == null;
+
+                ScoredCluster scored;
+                int assignStart = 0;
 
                 if (tailLeading)
                 {
                     var withTail = scoreCandidate(cluster, 0, parityCTW, gapCTW, internalCTW, prevGap, prevInternalDelta, tuning);
                     var withoutTail = scoreCandidate(cluster, 1, parityCTW, gapCTW, internalCTW, prevGap, prevInternalDelta, tuning);
 
-                    var chosen = withoutTail.surprise <= withTail.surprise ? withoutTail : withTail;
-
-                    parityCTW = chosen.parityCTW;
-                    gapCTW = chosen.gapCTW;
-                    internalCTW = chosen.internalCTW;
-                    prevGap = chosen.prevGap;
-                    prevInternalDelta = chosen.prevInternalDelta;
-
-                    var data = new RhythmClusterData(i, chosen.count, chosen.startTime, chosen.endTime, chosen.paritySurprise, chosen.gapSurprise, chosen.internalSurprise);
-
-                    int assignStart = withoutTail.surprise <= withTail.surprise ? 1 : 0;
-
-                    for (int j = assignStart; j < cluster.Count; j++)
-                        cluster[j].Source?.RhythmClusters.Add(data);
+                    scored = withoutTail.surprise <= withTail.surprise ? withoutTail : withTail;
+                    assignStart = withoutTail.surprise <= withTail.surprise ? 1 : 0;
                 }
                 else
                 {
-                    var result = scoreCandidate(cluster, 0, parityCTW, gapCTW, internalCTW, prevGap, prevInternalDelta, tuning);
-
-                    parityCTW = result.parityCTW;
-                    gapCTW = result.gapCTW;
-                    internalCTW = result.internalCTW;
-                    prevGap = result.prevGap;
-                    prevInternalDelta = result.prevInternalDelta;
-
-                    var data = new RhythmClusterData(i, result.count, result.startTime, result.endTime, result.paritySurprise, result.gapSurprise, result.internalSurprise);
-
-                    foreach (var evt in cluster)
-                        evt.Source?.RhythmClusters.Add(data);
+                    scored = scoreCandidate(cluster, 0, parityCTW, gapCTW, internalCTW, prevGap, prevInternalDelta, tuning);
                 }
+
+                parityCTW = scored.parityCTW;
+                gapCTW = scored.gapCTW;
+                internalCTW = scored.internalCTW;
+                prevGap = scored.prevGap;
+                prevInternalDelta = scored.prevInternalDelta;
+
+                scoredStartTimes.Add(scored.startTime);
+                scoredLeadingDeltas.Add(Math.Max(cluster[0].Delta, 1.0));
+
+                int contextIdx = Math.Max(0, scoredStartTimes.Count - tuning.CtwMaxDepth);
+                double contextTime = scored.endTime - scoredStartTimes[contextIdx] + scoredLeadingDeltas[contextIdx];
+                double timeScale = 1000.0 / Math.Max(contextTime, 1.0);
+
+                var data = new RhythmClusterData(i, scored.count, scored.startTime, scored.endTime,
+                    scored.paritySurprise * timeScale, scored.gapSurprise * timeScale, scored.internalSurprise * timeScale);
+
+                for (int j = assignStart; j < cluster.Count; j++)
+                    cluster[j].Source?.RhythmClusters.Add(data);
             }
 
             // Remove singlet entries from notes that also belong to larger clusters.
