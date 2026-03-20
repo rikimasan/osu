@@ -343,6 +343,12 @@ namespace osu.Game.Rulesets.Osu.Difficulty
 
             double rhythmValue = Skills.Rhythm.DifficultyToPerformance(attributes.RhythmDifficulty);
 
+            if (effectiveMissCount > 0)
+            {
+                double relevantMissCount = Math.Min(effectiveMissCount + speedEstimatedSliderBreaks, totalImperfectHits + countSliderTickMiss);
+                rhythmValue *= calculateMissPenalty(relevantMissCount, attributes.SpeedDifficultStrainCount);
+            }
+
             // Use the same effective hit window approach as speed.
             double effectiveHitWindow = 20 * Math.Pow(4 / attributes.RhythmDifficulty, 0.35);
             double effectiveAccuracy = DifficultyCalculationUtils.Erf(effectiveHitWindow / (double)speedDeviation);
