@@ -61,9 +61,6 @@ namespace osu.Game.Rulesets.Osu.Difficulty
         public double FlashlightSliderBonusScale { get; init; } = 1.3;
         public double FlashlightMinAngleScale { get; init; } = 0.2;
 
-        // Rhythm skill constants
-        public double RhythmLengthExponent { get; init; } = 0.6; // γ in total-information soft cap: (Σ localEntropyRate)^γ
-
         // CTW rhythm preprocessor constants
         public int CtwMaxDepth { get; init; } = 8; // structural — how far back the model looks
         public double CtwSurpriseScale { get; init; } = 100.0; // balancing — scales surprise contribution to rhythm multiplier
