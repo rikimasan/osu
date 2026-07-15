@@ -240,6 +240,20 @@ namespace osu.Game.Screens.Select
                 case NotifyCollectionChangedAction.Replace:
                     var oldSetBeatmaps = oldItems!.Single().Beatmaps;
                     var newSetBeatmaps = newItems!.Single().Beatmaps.ToList();
+                    var oldBeatmapIds = oldSetBeatmaps.Select(b => b.ID).ToHashSet();
+                    var previousIndices = new Dictionary<Guid, int>(oldBeatmapIds.Count);
+
+                    int itemIndex = 0;
+
+                    foreach (var item in Items)
+                    {
+                        if (oldBeatmapIds.Contains(item.ID))
+                            previousIndices.TryAdd(item.ID, itemIndex);
+
+                        itemIndex++;
+                    }
+
+                    var replacements = new List<(int Index, BeatmapInfo? Beatmap)>();
 
                     // Handling replace operations is a touch manual, as we need to locally diff the beatmaps of each version of the beatmap set.
                     // Matching is done based on online IDs, then difficulty names as these are the most stable thing between updates (which are usually triggered
@@ -250,19 +264,17 @@ namespace osu.Game.Screens.Select
                     // have been processed) if it becomes an issue for animation or performance reasons.
                     foreach (var beatmap in oldSetBeatmaps)
                     {
-                        int previousIndex = Items.IndexOf(beatmap);
-                        Debug.Assert(previousIndex >= 0);
+                        bool foundPreviousIndex = previousIndices.TryGetValue(beatmap.ID, out int previousIndex);
+                        Debug.Assert(foundPreviousIndex);
+
+                        if (!foundPreviousIndex)
+                            continue;
 
                         // we're intentionally being lenient with there being two difficulties with equal online ID or difficulty name.
                         // this can be the case when the user modifies the beatmap using the editor's "external edit" feature.
                         BeatmapInfo? matchingNewBeatmap =
                             newSetBeatmaps.FirstOrDefault(b => b.OnlineID > 0 && b.OnlineID == beatmap.OnlineID) ??
                             newSetBeatmaps.FirstOrDefault(b => b.DifficultyName == beatmap.DifficultyName && b.Ruleset.Equals(beatmap.Ruleset));
-
-                        // The matching beatmap may have been deleted or invalidated in some way since this event was fired.
-                        // Let's make sure we have the most up-to-date realm state.
-                        if (matchingNewBeatmap?.ID is Guid matchingID)
-                            matchingNewBeatmap = realm.Run(r => r.FindWithRefresh<BeatmapInfo>(matchingID)?.Detach());
 
                         if (matchingNewBeatmap != null)
                         {
@@ -274,13 +286,21 @@ namespace osu.Game.Screens.Select
                                 // which will pick a correct group - if one is present - via `HandleFilterCompleted()`.
                                 RequestSelection(new GroupedBeatmap(CurrentGroupedBeatmap?.Group, matchingNewBeatmap));
 
-                            Items.ReplaceRange(previousIndex, 1, [matchingNewBeatmap]);
+                            replacements.Add((previousIndex, matchingNewBeatmap));
                             newSetBeatmaps.Remove(matchingNewBeatmap);
                         }
                         else
                         {
-                            Items.RemoveAt(previousIndex);
+                            replacements.Add((previousIndex, null));
                         }
+                    }
+
+                    foreach (var (index, replacement) in replacements.OrderByDescending(r => r.Index))
+                    {
+                        if (replacement != null)
+                            Items.ReplaceRange(index, 1, [replacement]);
+                        else
+                            Items.RemoveAt(index);
                     }
 
                     // Add any items which weren't found in the previous pass (difficulty names didn't match).

@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using NUnit.Framework;
 using osu.Framework.Testing;
@@ -185,6 +186,46 @@ namespace osu.Game.Tests.Visual.SongSelect
 
             updateBeatmap(b => b.Metadata = metadata);
             assertDidNotFilter();
+        }
+
+        [Test]
+        public void TestBeatmapSetUpdatedFromStore()
+        {
+            var lastPlayed = DateTimeOffset.UtcNow;
+
+            updateBeatmap(b => b.LastPlayed = lastPlayed, updateRealm: false);
+            WaitForFiltering();
+
+            AddAssert("store update used", () => Carousel.PostFilterBeatmaps.Single(b => b.ID == baseTestBeatmap.Beatmaps[0].ID).LastPlayed, () => Is.EqualTo(lastPlayed));
+        }
+
+        [Test]
+        public void TestLargeStoreUpdateDoesNotBlockUpdateThread()
+        {
+            const int padding_set_count = 25000;
+            const int updated_difficulty_count = 500;
+
+            var stopwatch = new Stopwatch();
+            int filterCount = 0;
+
+            RemoveAllBeatmaps();
+            AddStep("populate large store", () =>
+            {
+                var beatmapSets = new List<BeatmapSetInfo>(padding_set_count + 1);
+
+                for (int i = 0; i < padding_set_count; i++)
+                    beatmapSets.Add(CreateTestBeatmapSetInfo(1, false));
+
+                baseTestBeatmap = CreateTestBeatmapSetInfo(updated_difficulty_count, false);
+                beatmapSets.Add(baseTestBeatmap);
+                BeatmapSets.AddRange(beatmapSets);
+            });
+            WaitForFiltering();
+
+            AddStep("store filter count", () => filterCount = Carousel.FilterCount);
+            updateBeatmap(b => b.LastPlayed = DateTimeOffset.UtcNow, updateRealm: false, beforeStoreUpdate: stopwatch.Restart);
+            AddUntilStep("refilter queued", () => Carousel.FilterCount, () => Is.EqualTo(filterCount + 1));
+            AddAssert("update thread remained responsive", () => stopwatch.ElapsedMilliseconds, () => Is.LessThan(250));
         }
 
         [TestCase(false, false)]
@@ -434,7 +475,7 @@ namespace osu.Game.Tests.Visual.SongSelect
 
         private void assertDidNotFilter() => AddAssert("did not filter", () => Carousel.FilterCount, () => Is.EqualTo(initial_filter_count));
 
-        private void updateBeatmap(Action<BeatmapInfo>? updateBeatmap = null, Action<BeatmapSetInfo>? updateSet = null)
+        private void updateBeatmap(Action<BeatmapInfo>? updateBeatmap = null, Action<BeatmapSetInfo>? updateSet = null, bool updateRealm = true, Action? beforeStoreUpdate = null)
         {
             AddStep("update beatmap with different reference", () =>
             {
@@ -467,7 +508,10 @@ namespace osu.Game.Tests.Visual.SongSelect
 
                 int originalIndex = BeatmapSets.IndexOf(baseTestBeatmap);
 
-                Realm.Write(r => r.Add(updatedSet, update: true));
+                if (updateRealm)
+                    Realm.Write(r => r.Add(updatedSet, update: true));
+
+                beforeStoreUpdate?.Invoke();
                 BeatmapSets.ReplaceRange(originalIndex, 1, [updatedSet.Detach()]);
             });
         }
@@ -479,8 +523,8 @@ namespace osu.Game.Tests.Visual.SongSelect
             var updatedBeatmap = new BeatmapInfo
             {
                 ID = reference.ID,
-                Metadata = reference.Metadata,
-                Ruleset = reference.Ruleset,
+                Metadata = reference.Metadata.Detach(),
+                Ruleset = reference.Ruleset.Detach(),
                 DifficultyName = reference.DifficultyName,
                 BeatmapSet = set,
                 Status = reference.Status,
