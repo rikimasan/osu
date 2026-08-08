@@ -24,6 +24,7 @@ using osu.Game.Overlays;
 using osu.Game.Overlays.Notifications;
 using osu.Game.Performance;
 using osu.Game.Rulesets;
+using osu.Game.Rulesets.Mods;
 using osu.Game.Scoring;
 using osu.Game.Scoring.Legacy;
 using osu.Game.Screens.Play;
@@ -95,6 +96,7 @@ namespace osu.Game.Database
 
                 clearOutdatedStarRatings();
                 populateMissingStarRatings();
+                populateMissingModStarRatings();
                 processOnlineBeatmapSetsWithNoUpdate();
                 // Note that the previous method will also update these on a fresh run.
                 processBeatmapsWithMissingObjectCounts();
@@ -221,6 +223,115 @@ namespace osu.Game.Database
                             liveBeatmapInfo.StarRating = starRating;
                     });
                     ((IWorkingBeatmapCache)beatmapManager).Invalidate(beatmap);
+                    ++processedCount;
+                }
+                catch (Exception e)
+                {
+                    Logger.Log($"Background processing failed on {beatmap}: {e}");
+                    ++failedCount;
+                }
+            }
+
+            completeNotification(notification, processedCount, beatmapIds.Count, failedCount);
+        }
+
+        /// <remarks>
+        /// Runs after <see cref="populateMissingStarRatings"/> so that unmodded ratings, which all of song select relies on,
+        /// are populated before the more expensive per-mod-combination pass begins.
+        /// </remarks>
+        private void populateMissingModStarRatings()
+        {
+            HashSet<Guid> beatmapIds = new HashSet<Guid>();
+
+            Logger.Log("Querying for beatmaps with missing mod star ratings...");
+
+            realmAccess.Run(r =>
+            {
+                var incomplete = r.All<BeatmapInfo>().Filter(
+                    $@"{nameof(BeatmapInfo.ModStarRatings)}.@count < $0 && {nameof(BeatmapInfo.BeatmapSet)} != null",
+                    ModStarRatingCombinations.ALL_KEYS.Length);
+
+                foreach (var b in incomplete)
+                    beatmapIds.Add(b.ID);
+            });
+
+            if (beatmapIds.Count == 0)
+                return;
+
+            Logger.Log($"Found {beatmapIds.Count} beatmaps which require mod star rating processing.");
+
+            var notification = showProgressNotification(beatmapIds.Count, "Calculating star ratings with mods for beatmaps", "beatmaps' mod star ratings have been calculated");
+
+            int processedCount = 0;
+            int failedCount = 0;
+
+            Dictionary<string, Ruleset> rulesetCache = new Dictionary<string, Ruleset>();
+
+            Ruleset getRuleset(RulesetInfo rulesetInfo)
+            {
+                if (!rulesetCache.TryGetValue(rulesetInfo.ShortName, out var ruleset))
+                    ruleset = rulesetCache[rulesetInfo.ShortName] = rulesetInfo.CreateInstance();
+
+                return ruleset;
+            }
+
+            foreach (Guid id in beatmapIds)
+            {
+                if (notification?.State == ProgressNotificationState.Cancelled)
+                    break;
+
+                updateNotificationProgress(notification, processedCount, beatmapIds.Count);
+
+                var beatmap = realmAccess.Run(r => r.Find<BeatmapInfo>(id)?.Detach());
+
+                if (beatmap == null)
+                    continue;
+
+                try
+                {
+                    HashSet<string> existingKeys = beatmap.ModStarRatings.Select(m => m.Mods).ToHashSet();
+
+                    var working = beatmapManager.GetWorkingBeatmap(beatmap);
+                    var ruleset = getRuleset(working.BeatmapInfo.Ruleset);
+                    var calculator = ruleset.CreateDifficultyCalculator(working);
+
+                    List<ModStarRating> computed = new List<ModStarRating>();
+
+                    foreach ((string key, string[] acronyms) in ModStarRatingCombinations.ALL_COMBINATIONS)
+                    {
+                        if (existingKeys.Contains(key))
+                            continue;
+
+                        var mods = acronyms.Select(ruleset.CreateModFromAcronym).OfType<Mod>().ToArray();
+
+                        // The ruleset does not implement every tracked mod; the combination is left unstored.
+                        if (mods.Length != acronyms.Length)
+                            continue;
+
+                        sleepIfRequired();
+
+                        computed.Add(new ModStarRating
+                        {
+                            Mods = key,
+                            StarRating = calculator.Calculate(mods).StarRating,
+                        });
+                    }
+
+                    if (computed.Count > 0)
+                    {
+                        realmAccess.Write(r =>
+                        {
+                            if (r.Find<BeatmapInfo>(id) is BeatmapInfo liveBeatmapInfo)
+                            {
+                                foreach (var rating in computed)
+                                {
+                                    if (liveBeatmapInfo.ModStarRatings.All(m => m.Mods != rating.Mods))
+                                        liveBeatmapInfo.ModStarRatings.Add(rating);
+                                }
+                            }
+                        });
+                    }
+
                     ++processedCount;
                 }
                 catch (Exception e)
