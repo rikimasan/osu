@@ -127,6 +127,33 @@ namespace osu.Game.Tests.Database
             });
         }
 
+        [Test]
+        public void TestModStarRatingProcessing()
+        {
+            AddStep("Clear mod star ratings", () =>
+            {
+                Realm.Write(r =>
+                {
+                    foreach (var b in r.Find<BeatmapSetInfo>(importedSet.ID)!.Beatmaps)
+                        b.ModStarRatings.Clear();
+                });
+            });
+
+            TestBackgroundDataStoreProcessor processor = null!;
+            AddStep("Run background processor", () => Add(processor = new TestBackgroundDataStoreProcessor()));
+            AddUntilStep("Wait for completion", () => processor.Completed);
+
+            AddAssert("Mod star ratings populated for every tracked combination", () =>
+            {
+                return Realm.Run(r =>
+                {
+                    var beatmapSetInfo = r.Find<BeatmapSetInfo>(importedSet.ID)!;
+                    return beatmapSetInfo.Beatmaps.All(b =>
+                        ModStarRatingCombinations.ALL_KEYS.All(key => b.ModStarRatings.Any(m => m.Mods == key && m.StarRating > 0)));
+                });
+            });
+        }
+
         [TestCase(30000001)]
         [TestCase(30000002)]
         [TestCase(30000003)]

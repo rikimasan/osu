@@ -20,16 +20,20 @@ namespace osu.Game.Beatmaps
         /// </summary>
         public static readonly string[] TRACKED_ACRONYMS = { @"DT", @"HD", @"HR" };
 
-        private static readonly string[][] tracked_combinations =
+        /// <summary>
+        /// All tracked combinations - every non-empty subset of <see cref="TRACKED_ACRONYMS"/> - keyed by their
+        /// canonical key (the acronyms concatenated in sorted order, as stored in <see cref="ModStarRating.Mods"/>),
+        /// with each value holding the combination's individual acronyms.
+        /// </summary>
+        public static readonly IReadOnlyDictionary<string, string[]> ALL_COMBINATIONS =
             Enumerable.Range(1, (1 << TRACKED_ACRONYMS.Length) - 1)
                       .Select(bits => TRACKED_ACRONYMS.Where((_, i) => (bits & (1 << i)) != 0).ToArray())
-                      .ToArray();
+                      .ToDictionary(c => string.Concat(c), c => c);
 
         /// <summary>
-        /// The keys of all tracked combinations: every non-empty subset of <see cref="TRACKED_ACRONYMS"/>,
-        /// each encoded as its acronyms concatenated in sorted order.
+        /// The canonical keys of all tracked combinations.
         /// </summary>
-        public static readonly string[] ALL_KEYS = tracked_combinations.Select(c => string.Concat(c)).ToArray();
+        public static readonly string[] ALL_KEYS = ALL_COMBINATIONS.Keys.ToArray();
 
         /// <summary>
         /// Computes the canonical key for a mod selection, or <c>null</c> if it contains no tracked mods.
