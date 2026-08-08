@@ -128,6 +128,39 @@ namespace osu.Game.Tests.Database
         }
 
         [Test]
+        public void TestOutdatedModStarRatingsClearedAndRecalculated()
+        {
+            AddStep("Seed bogus mod star rating and outdated difficulty version", () =>
+            {
+                Realm.Write(r =>
+                {
+                    foreach (var b in r.Find<BeatmapSetInfo>(importedSet.ID)!.Beatmaps)
+                    {
+                        b.ModStarRatings.Clear();
+                        b.ModStarRatings.Add(new ModStarRating { Mods = "HD", StarRating = 99 });
+                    }
+
+                    r.Find<RulesetInfo>("osu")!.LastAppliedDifficultyVersion = 0;
+                });
+            });
+
+            TestBackgroundDataStoreProcessor processor = null!;
+            AddStep("Run background processor", () => Add(processor = new TestBackgroundDataStoreProcessor()));
+            AddUntilStep("Wait for completion", () => processor.Completed);
+
+            AddAssert("Bogus rating replaced by full recalculation", () =>
+            {
+                return Realm.Run(r =>
+                {
+                    var beatmapSetInfo = r.Find<BeatmapSetInfo>(importedSet.ID)!;
+                    return beatmapSetInfo.Beatmaps.All(b =>
+                        b.ModStarRatings.Count == ModStarRatingCombinations.ALL_KEYS.Length
+                        && b.ModStarRatings.All(m => m.StarRating > 0 && m.StarRating < 99));
+                });
+            });
+        }
+
+        [Test]
         public void TestModStarRatingProcessing()
         {
             AddStep("Clear mod star ratings", () =>

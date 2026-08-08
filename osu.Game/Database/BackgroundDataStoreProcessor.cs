@@ -96,10 +96,10 @@ namespace osu.Game.Database
 
                 clearOutdatedStarRatings();
                 populateMissingStarRatings();
-                populateMissingModStarRatings();
                 processOnlineBeatmapSetsWithNoUpdate();
                 // Note that the previous method will also update these on a fresh run.
                 processBeatmapsWithMissingObjectCounts();
+                populateMissingModStarRatings();
                 processScoresWithMissingStatistics();
                 // ordering significant, `upgradeModMultipliers()` should run first as it will handle all scores
                 // (rather than only lazer scores, if it was called after `convertLegacyTotalScoreToStandardised()`)
@@ -144,6 +144,7 @@ namespace osu.Game.Database
                             if (b.Ruleset.ShortName == ruleset.ShortName)
                             {
                                 b.StarRating = -1;
+                                b.ModStarRatings.Clear();
                                 countReset++;
                             }
                         }
@@ -237,7 +238,9 @@ namespace osu.Game.Database
 
         /// <remarks>
         /// Runs after <see cref="populateMissingStarRatings"/> so that unmodded ratings, which all of song select relies on,
-        /// are populated before the more expensive per-mod-combination pass begins.
+        /// are populated before this more expensive pass begins. Must also run after any step which may invoke
+        /// <see cref="BeatmapUpdater.Process"/> (ie. <see cref="processOnlineBeatmapSetsWithNoUpdate"/>), as that clears
+        /// mod star ratings and would discard this pass's results within the same run.
         /// </remarks>
         private void populateMissingModStarRatings()
         {
