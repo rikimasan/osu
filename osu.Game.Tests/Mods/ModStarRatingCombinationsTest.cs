@@ -54,18 +54,27 @@ namespace osu.Game.Tests.Mods
         }
 
         [Test]
-        public void TestNonDefaultSettingsHaveNoKey()
+        public void TestModSettingsAreIgnored()
         {
             var doubleTime = new OsuModDoubleTime();
             doubleTime.SpeedChange.Value = 1.4;
 
-            Assert.That(ModStarRatingCombinations.GetKey(new Mod[] { doubleTime }), Is.Null);
+            Assert.That(ModStarRatingCombinations.GetKey(new Mod[] { doubleTime }), Is.EqualTo("DT"));
         }
 
         [Test]
-        public void TestUntrackedModInSelectionHasNoKey()
+        public void TestUntrackedModsAreIgnored()
         {
-            Assert.That(ModStarRatingCombinations.GetKey(new Mod[] { new OsuModHidden(), new OsuModNoFail() }), Is.Null);
+            Assert.That(ModStarRatingCombinations.GetKey(new Mod[] { new OsuModHidden(), new OsuModNoFail() }), Is.EqualTo("HD"));
+
+            // Also ignored when the untracked mod itself affects difficulty; the tracked approximation is preferred over none.
+            Assert.That(ModStarRatingCombinations.GetKey(new Mod[] { new OsuModHidden(), new OsuModFlashlight() }), Is.EqualTo("HD"));
+        }
+
+        [Test]
+        public void TestSelectionOfOnlyUntrackedModsHasNoKey()
+        {
+            Assert.That(ModStarRatingCombinations.GetKey(new Mod[] { new OsuModNoFail() }), Is.Null);
         }
     }
 }

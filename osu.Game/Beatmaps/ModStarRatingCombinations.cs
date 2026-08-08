@@ -16,7 +16,7 @@ namespace osu.Game.Beatmaps
     {
         /// <summary>
         /// The acronyms of mods tracked for persisted star ratings, in sorted order.
-        /// Only mods in their default configuration are tracked (ie. DoubleTime only at its default 1.5x rate).
+        /// Persisted ratings are calculated with each mod in its default configuration (ie. DoubleTime at its default 1.5x rate).
         /// </summary>
         public static readonly string[] TRACKED_ACRONYMS = { @"DT", @"HD", @"HR" };
 
@@ -32,21 +32,19 @@ namespace osu.Game.Beatmaps
         public static readonly string[] ALL_KEYS = tracked_combinations.Select(c => string.Concat(c)).ToArray();
 
         /// <summary>
-        /// Computes the canonical key for a mod selection, or <c>null</c> if no star rating is tracked for it.
-        /// A selection is tracked when it is exactly one of the tracked combinations with every mod in its default configuration.
-        /// An empty selection returns <c>null</c>; its rating is stored as <see cref="BeatmapInfo.StarRating"/> instead.
+        /// Computes the canonical key for a mod selection, or <c>null</c> if it contains no tracked mods.
+        /// Only the presence of tracked mods is considered; all other mods and all mod settings are ignored,
+        /// on the basis that the tracked rating is a closer approximation than the unmodded one.
         /// </summary>
         public static string? GetKey(IEnumerable<Mod> mods)
         {
-            var selection = mods.ToArray();
+            string[] acronyms = mods.Select(m => m.Acronym)
+                                    .Where(a => TRACKED_ACRONYMS.Contains(a))
+                                    .Distinct()
+                                    .OrderBy(a => a, StringComparer.Ordinal)
+                                    .ToArray();
 
-            if (selection.Any(m => !m.UsesDefaultConfiguration))
-                return null;
-
-            string[] acronyms = selection.Select(m => m.Acronym).OrderBy(a => a, StringComparer.Ordinal).ToArray();
-
-            string[]? match = tracked_combinations.FirstOrDefault(c => c.SequenceEqual(acronyms));
-            return match == null ? null : string.Concat(match);
+            return acronyms.Length == 0 ? null : string.Concat(acronyms);
         }
     }
 }
