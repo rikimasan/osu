@@ -53,6 +53,14 @@ namespace osu.Game.Screens.Select
 
         public RulesetInfo? Ruleset;
         public IReadOnlyList<Mod>? Mods;
+
+        /// <summary>
+        /// The canonical key of the tracked mod combination derived from <see cref="Mods"/>, used to match star ratings
+        /// against per-mod values persisted on beatmaps (see <see cref="ModStarRatingCombinations.GetKey"/>).
+        /// Null when no tracked mod is selected, in which case the unmodded <see cref="BeatmapInfo.StarRating"/> applies.
+        /// </summary>
+        public string? ModStarRatingKey;
+
         public bool AllowConvertedBeatmaps;
         public int? BeatmapSetId;
 
