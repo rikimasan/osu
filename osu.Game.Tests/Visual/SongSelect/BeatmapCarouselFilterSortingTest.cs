@@ -173,6 +173,41 @@ namespace osu.Game.Tests.Visual.SongSelect
             });
         }
 
+        [Test]
+        public async Task TestSortByDifficultyUsesModStarRatings()
+        {
+            List<BeatmapSetInfo> beatmapSets = new List<BeatmapSetInfo>();
+
+            // Two single-difficulty sets whose unmodded and DT ratings order in opposite directions.
+            {
+                var set = TestResources.CreateTestBeatmapSetInfo(1);
+                var beatmap = set.Beatmaps.Single();
+                beatmap.StarRating = 3.0;
+                beatmap.ModStarRatings.Add(new ModStarRating { Mods = "DT", StarRating = 6.0 });
+                beatmap.Metadata.Title = "AAA";
+                beatmapSets.Add(set);
+            }
+
+            {
+                var set = TestResources.CreateTestBeatmapSetInfo(1);
+                var beatmap = set.Beatmaps.Single();
+                beatmap.StarRating = 4.0;
+                beatmap.ModStarRatings.Add(new ModStarRating { Mods = "DT", StarRating = 5.0 });
+                beatmap.Metadata.Title = "BBB";
+                beatmapSets.Add(set);
+            }
+
+            var unmodded = (await runSorting(SortMode.Difficulty, beatmapSets)).ToList();
+
+            Assert.That(unmodded[0].Metadata.Title, Is.EqualTo("AAA"));
+            Assert.That(unmodded[1].Metadata.Title, Is.EqualTo("BBB"));
+
+            var modded = (await runSorting(SortMode.Difficulty, beatmapSets, "DT")).ToList();
+
+            Assert.That(modded[0].Metadata.Title, Is.EqualTo("BBB"));
+            Assert.That(modded[1].Metadata.Title, Is.EqualTo("AAA"));
+        }
+
         /// <summary>
         /// Ensures stability is maintained on different sort modes for items with equal properties.
         /// </summary>
@@ -205,9 +240,9 @@ namespace osu.Game.Tests.Visual.SongSelect
             Assert.That(results.Select(b => b.BeatmapSet!.DateAdded), Is.Ordered.Descending);
         }
 
-        private static async Task<IEnumerable<BeatmapInfo>> runSorting(SortMode sort, List<BeatmapSetInfo> beatmapSets)
+        private static async Task<IEnumerable<BeatmapInfo>> runSorting(SortMode sort, List<BeatmapSetInfo> beatmapSets, string? modStarRatingKey = null)
         {
-            var sorter = new BeatmapCarouselFilterSorting(() => new FilterCriteria { Sort = sort });
+            var sorter = new BeatmapCarouselFilterSorting(() => new FilterCriteria { Sort = sort, ModStarRatingKey = modStarRatingKey });
             var carouselItems = await sorter.Run(beatmapSets.SelectMany(s => s.Beatmaps.Select(b => new CarouselItem(b))), CancellationToken.None);
             return carouselItems.Select(ci => ci.Model).OfType<BeatmapInfo>();
         }
