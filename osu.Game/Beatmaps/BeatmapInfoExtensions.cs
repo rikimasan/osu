@@ -13,6 +13,19 @@ namespace osu.Game.Beatmaps
     public static class BeatmapInfoExtensions
     {
         /// <summary>
+        /// Returns the persisted star rating for the given tracked mod combination key (see <see cref="ModStarRating.Mods"/>),
+        /// falling back to the unmodded <see cref="BeatmapInfo.StarRating"/> when the key is null or no rating
+        /// has been calculated for it yet.
+        /// </summary>
+        public static double GetStarRating(this BeatmapInfo beatmapInfo, string? modStarRatingKey)
+        {
+            if (modStarRatingKey == null)
+                return beatmapInfo.StarRating;
+
+            return beatmapInfo.ModStarRatings.FirstOrDefault(m => m.Mods == modStarRatingKey)?.StarRating ?? beatmapInfo.StarRating;
+        }
+
+        /// <summary>
         /// Given an <see cref="IBeatmap"/>, update length, BPM and object counts.
         /// </summary>
         public static void UpdateStatisticsFromBeatmap(this BeatmapInfo beatmapInfo, IBeatmap beatmap)
