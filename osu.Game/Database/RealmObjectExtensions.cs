@@ -147,7 +147,10 @@ namespace osu.Game.Database
              });
 
             c.CreateMap<BeatmapInfo, BeatmapInfo>()
-             .MaxDepth(1)
+             // Must be at least 2: collection members (ie. ModStarRatings) check the containing map's depth
+             // during mapping and are silently emptied at depth 1. The cyclic BeatmapSet member is ignored
+             // below, so this cannot cause recursive re-fetches.
+             .MaxDepth(2)
              // This is not required as it will be populated in the `AfterMap` call from the `BeatmapInfo`'s parent.
              .ForMember(b => b.BeatmapSet, cc => cc.Ignore());
         }).CreateMapper();
@@ -175,6 +178,7 @@ namespace osu.Game.Database
             c.CreateMap<BeatmapMetadata, BeatmapMetadata>();
             c.CreateMap<BeatmapUserSettings, BeatmapUserSettings>();
             c.CreateMap<BeatmapDifficulty, BeatmapDifficulty>();
+            c.CreateMap<ModStarRating, ModStarRating>();
             c.CreateMap<RulesetInfo, RulesetInfo>();
             c.CreateMap<ScoreInfo, ScoreInfo>();
             c.CreateMap<RealmUser, RealmUser>();

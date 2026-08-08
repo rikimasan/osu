@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using JetBrains.Annotations;
@@ -93,6 +94,12 @@ namespace osu.Game.Beatmaps
         /// Will likely be superseded with a better storage considering ruleset/mods.
         /// </summary>
         public double StarRating { get; set; } = -1;
+
+        /// <summary>
+        /// Star ratings calculated for a fixed set of tracked mod combinations, keyed by <see cref="ModStarRating.Mods"/>.
+        /// Empty until populated by background processing; a combination may be absent if not yet (or unable to be) calculated.
+        /// </summary>
+        public IList<ModStarRating> ModStarRatings { get; } = null!;
 
         [Indexed]
         public string MD5Hash { get; set; } = string.Empty;
