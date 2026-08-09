@@ -24,6 +24,7 @@ using osu.Game.Overlays;
 using osu.Game.Overlays.Notifications;
 using osu.Game.Performance;
 using osu.Game.Rulesets;
+using osu.Game.Rulesets.Difficulty;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Scoring;
 using osu.Game.Scoring.Legacy;
@@ -77,6 +78,8 @@ namespace osu.Game.Database
 
         private LocalCachedBeatmapMetadataSource localMetadataSource = null!;
 
+        private ModStarRatingCache modStarRatingCache = null!;
+
         protected virtual int TimeToSleepDuringGameplay => 30000;
 
         protected virtual bool SkipProcessing => DebugUtils.IsNUnitRunning;
@@ -89,6 +92,7 @@ namespace osu.Game.Database
                 return;
 
             localMetadataSource = new LocalCachedBeatmapMetadataSource(storage);
+            modStarRatingCache = new ModStarRatingCache(storage);
 
             ProcessingTask = Task.Factory.StartNew(() =>
             {
@@ -269,6 +273,7 @@ namespace osu.Game.Database
             int failedCount = 0;
 
             Dictionary<string, Ruleset> rulesetCache = new Dictionary<string, Ruleset>();
+            Dictionary<string, int> calculatorVersionCache = new Dictionary<string, int>();
 
             Ruleset getRuleset(RulesetInfo rulesetInfo)
             {
@@ -276,6 +281,17 @@ namespace osu.Game.Database
                     ruleset = rulesetCache[rulesetInfo.ShortName] = rulesetInfo.CreateInstance();
 
                 return ruleset;
+            }
+
+            int getCalculatorVersion(Ruleset ruleset)
+            {
+                string shortName = ruleset.RulesetInfo.ShortName;
+
+                if (!calculatorVersionCache.TryGetValue(shortName, out int version))
+                    // The beatmap passed in is arbitrary here (as in clearOutdatedStarRatings); the version does not depend on it.
+                    version = calculatorVersionCache[shortName] = ruleset.CreateDifficultyCalculator(gameBeatmap.Value).Version;
+
+                return version;
             }
 
             foreach (Guid id in beatmapIds)
@@ -294,9 +310,11 @@ namespace osu.Game.Database
                 {
                     HashSet<string> existingKeys = beatmap.ModStarRatings.Select(m => m.Mods).ToHashSet();
 
-                    var working = beatmapManager.GetWorkingBeatmap(beatmap);
-                    var ruleset = getRuleset(working.BeatmapInfo.Ruleset);
-                    var calculator = ruleset.CreateDifficultyCalculator(working);
+                    var ruleset = getRuleset(beatmap.Ruleset);
+                    int calculatorVersion = getCalculatorVersion(ruleset);
+
+                    // Created lazily so that beatmaps fully served from the cache never load their file contents.
+                    DifficultyCalculator? calculator = null;
 
                     List<ModStarRating> computed = new List<ModStarRating>();
 
@@ -304,6 +322,16 @@ namespace osu.Game.Database
                     {
                         if (existingKeys.Contains(key))
                             continue;
+
+                        if (modStarRatingCache.TryGet(beatmap.MD5Hash, beatmap.Ruleset.ShortName, key, calculatorVersion, out double cachedRating))
+                        {
+                            computed.Add(new ModStarRating
+                            {
+                                Mods = key,
+                                StarRating = cachedRating,
+                            });
+                            continue;
+                        }
 
                         var mods = acronyms.Select(ruleset.CreateModFromAcronym).OfType<Mod>().ToArray();
 
@@ -313,10 +341,15 @@ namespace osu.Game.Database
 
                         sleepIfRequired();
 
+                        calculator ??= ruleset.CreateDifficultyCalculator(beatmapManager.GetWorkingBeatmap(beatmap));
+
+                        double starRating = calculator.Calculate(mods).StarRating;
+                        modStarRatingCache.Store(beatmap.MD5Hash, beatmap.Ruleset.ShortName, key, calculatorVersion, starRating);
+
                         computed.Add(new ModStarRating
                         {
                             Mods = key,
-                            StarRating = calculator.Calculate(mods).StarRating,
+                            StarRating = starRating,
                         });
                     }
 

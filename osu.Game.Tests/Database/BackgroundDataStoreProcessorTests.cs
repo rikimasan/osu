@@ -2,11 +2,13 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using osu.Framework.Allocation;
 using osu.Framework.Bindables;
 using osu.Framework.Extensions;
+using osu.Framework.Platform;
 using osu.Framework.Testing;
 using osu.Game.Beatmaps;
 using osu.Game.Database;
@@ -15,6 +17,7 @@ using osu.Game.Rulesets.Osu.Mods;
 using osu.Game.Scoring;
 using osu.Game.Scoring.Legacy;
 using osu.Game.Screens.Play;
+using osu.Game.Tests.Beatmaps;
 using osu.Game.Tests.Beatmaps.IO;
 using osu.Game.Tests.Visual;
 
@@ -29,10 +32,13 @@ namespace osu.Game.Tests.Database
 
         private BeatmapSetInfo importedSet = null!;
 
+        private Storage gameStorage = null!;
+
         [BackgroundDependencyLoader]
-        private void load(OsuGameBase osu)
+        private void load(OsuGameBase osu, Storage storage)
         {
             importedSet = BeatmapImportHelper.LoadQuickOszIntoOsu(osu).GetResultSafely();
+            gameStorage = storage;
         }
 
         [SetUpSteps]
@@ -156,6 +162,57 @@ namespace osu.Game.Tests.Database
                     return beatmapSetInfo.Beatmaps.All(b =>
                         b.ModStarRatings.Count == ModStarRatingCombinations.ALL_KEYS.Length
                         && b.ModStarRatings.All(m => m.StarRating > 0 && m.StarRating < 99));
+                });
+            });
+        }
+
+        [Test]
+        public void TestPopulateModStarRatingsFromCache()
+        {
+            // Named to sort (and so run) after the other mod star rating tests: the sentinel values
+            // persist in the fixture's cache database and would pollute later reads of mod star ratings.
+            // A rating no real calculation would produce, proving values were served from the cache.
+            const double sentinel_rating = 98.76;
+
+            AddStep("Seed cache and clear mod star ratings", () =>
+            {
+                var cache = new ModStarRatingCache(gameStorage);
+
+                // The imported set contains beatmaps of several rulesets, whose calculator versions differ.
+                var versions = new Dictionary<string, int>();
+
+                int getCalculatorVersion(RulesetInfo rulesetInfo)
+                {
+                    if (!versions.TryGetValue(rulesetInfo.ShortName, out int version))
+                        version = versions[rulesetInfo.ShortName] = rulesetInfo.CreateInstance().CreateDifficultyCalculator(new TestWorkingBeatmap(new Beatmap())).Version;
+
+                    return version;
+                }
+
+                Realm.Write(r =>
+                {
+                    foreach (var b in r.Find<BeatmapSetInfo>(importedSet.ID)!.Beatmaps)
+                    {
+                        b.ModStarRatings.Clear();
+
+                        foreach (string key in ModStarRatingCombinations.ALL_KEYS)
+                            cache.Store(b.MD5Hash, b.Ruleset.ShortName, key, getCalculatorVersion(b.Ruleset), sentinel_rating);
+                    }
+                });
+            });
+
+            TestBackgroundDataStoreProcessor processor = null!;
+            AddStep("Run background processor", () => Add(processor = new TestBackgroundDataStoreProcessor()));
+            AddUntilStep("Wait for completion", () => processor.Completed);
+
+            AddAssert("Mod star ratings backfilled from cache", () =>
+            {
+                return Realm.Run(r =>
+                {
+                    var beatmapSetInfo = r.Find<BeatmapSetInfo>(importedSet.ID)!;
+                    return beatmapSetInfo.Beatmaps.All(b =>
+                        b.ModStarRatings.Count == ModStarRatingCombinations.ALL_KEYS.Length
+                        && b.ModStarRatings.All(m => m.StarRating == sentinel_rating));
                 });
             });
         }
