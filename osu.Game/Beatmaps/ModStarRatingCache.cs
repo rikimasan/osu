@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Generic;
 using Microsoft.Data.Sqlite;
 using osu.Framework.Logging;
 using osu.Framework.Platform;
@@ -39,12 +40,12 @@ namespace osu.Game.Beatmaps
         }
 
         /// <summary>
-        /// Attempts to retrieve a cached star rating. A cached value only matches if it was calculated
-        /// by the same difficulty calculator version.
+        /// Retrieves all cached star ratings for a beatmap and ruleset. Cached values only match if they
+        /// were calculated by the same difficulty calculator version.
         /// </summary>
-        public bool TryGet(string beatmapMD5Hash, string rulesetShortName, string modsKey, int calculatorVersion, out double starRating)
+        public IReadOnlyDictionary<string, double> GetRatings(string beatmapMD5Hash, string rulesetShortName, int calculatorVersion)
         {
-            starRating = default;
+            var ratings = new Dictionary<string, double>();
 
             try
             {
@@ -55,19 +56,15 @@ namespace osu.Game.Beatmaps
                     using (var command = connection.CreateCommand())
                     {
                         command.CommandText =
-                            @"SELECT `star_rating` FROM `ratings` WHERE `beatmap_md5` = $md5 AND `ruleset` = $ruleset AND `mods` = $mods AND `calculator_version` = $version";
+                            @"SELECT `mods`, `star_rating` FROM `ratings` WHERE `beatmap_md5` = $md5 AND `ruleset` = $ruleset AND `calculator_version` = $version";
                         command.Parameters.AddWithValue(@"$md5", beatmapMD5Hash);
                         command.Parameters.AddWithValue(@"$ruleset", rulesetShortName);
-                        command.Parameters.AddWithValue(@"$mods", modsKey);
                         command.Parameters.AddWithValue(@"$version", calculatorVersion);
 
                         using (var reader = command.ExecuteReader())
                         {
-                            if (!reader.Read())
-                                return false;
-
-                            starRating = reader.GetDouble(0);
-                            return true;
+                            while (reader.Read())
+                                ratings.Add(reader.GetString(0), reader.GetDouble(1));
                         }
                     }
                 }
@@ -75,10 +72,12 @@ namespace osu.Game.Beatmaps
             catch (SqliteException ex)
             {
                 Logger.Log($@"Mod star rating cache lookup failed, purging cache: {ex}");
+                ratings.Clear();
                 purge();
                 prepareSchema();
-                return false;
             }
+
+            return ratings;
         }
 
         /// <summary>
