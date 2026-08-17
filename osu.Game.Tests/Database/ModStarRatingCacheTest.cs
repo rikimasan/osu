@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 using osu.Framework.Testing;
 using osu.Game.Beatmaps;
@@ -31,15 +32,19 @@ namespace osu.Game.Tests.Database
         public void TestRoundTrip()
         {
             cache.Store("abc123", "osu", "DTHD", 20260706, 7.5);
+            cache.Store("abc123", "osu", "HR", 20260706, 8.25);
 
-            Assert.That(cache.TryGet("abc123", "osu", "DTHD", 20260706, out double rating), Is.True);
-            Assert.That(rating, Is.EqualTo(7.5));
+            Assert.That(cache.GetRatings("abc123", "osu", 20260706), Is.EquivalentTo(new Dictionary<string, double>
+            {
+                ["DTHD"] = 7.5,
+                ["HR"] = 8.25,
+            }));
         }
 
         [Test]
         public void TestMissOnAbsentEntry()
         {
-            Assert.That(cache.TryGet("unknown", "osu", "DT", 20260706, out _), Is.False);
+            Assert.That(cache.GetRatings("unknown", "osu", 20260706), Is.Empty);
         }
 
         [Test]
@@ -47,9 +52,8 @@ namespace osu.Game.Tests.Database
         {
             cache.Store("abc123", "osu", "DTHD", 20260706, 7.5);
 
-            Assert.That(cache.TryGet("abc123", "osu", "DT", 20260706, out _), Is.False);
-            Assert.That(cache.TryGet("abc123", "taiko", "DTHD", 20260706, out _), Is.False);
-            Assert.That(cache.TryGet("other", "osu", "DTHD", 20260706, out _), Is.False);
+            Assert.That(cache.GetRatings("abc123", "taiko", 20260706), Is.Empty);
+            Assert.That(cache.GetRatings("other", "osu", 20260706), Is.Empty);
         }
 
         [Test]
@@ -57,7 +61,7 @@ namespace osu.Game.Tests.Database
         {
             cache.Store("abc123", "osu", "DTHD", 20260706, 7.5);
 
-            Assert.That(cache.TryGet("abc123", "osu", "DTHD", 20270101, out _), Is.False);
+            Assert.That(cache.GetRatings("abc123", "osu", 20270101), Is.Empty);
         }
 
         [Test]
@@ -66,9 +70,8 @@ namespace osu.Game.Tests.Database
             cache.Store("abc123", "osu", "DTHD", 20260706, 7.5);
             cache.Store("abc123", "osu", "DTHD", 20270101, 7.8);
 
-            Assert.That(cache.TryGet("abc123", "osu", "DTHD", 20260706, out _), Is.False);
-            Assert.That(cache.TryGet("abc123", "osu", "DTHD", 20270101, out double rating), Is.True);
-            Assert.That(rating, Is.EqualTo(7.8));
+            Assert.That(cache.GetRatings("abc123", "osu", 20260706), Is.Empty);
+            Assert.That(cache.GetRatings("abc123", "osu", 20270101)["DTHD"], Is.EqualTo(7.8));
         }
 
         [Test]
@@ -78,8 +81,7 @@ namespace osu.Game.Tests.Database
 
             var secondInstance = new ModStarRatingCache(storage);
 
-            Assert.That(secondInstance.TryGet("abc123", "osu", "DTHD", 20260706, out double rating), Is.True);
-            Assert.That(rating, Is.EqualTo(7.5));
+            Assert.That(secondInstance.GetRatings("abc123", "osu", 20260706)["DTHD"], Is.EqualTo(7.5));
         }
     }
 }

@@ -312,6 +312,7 @@ namespace osu.Game.Database
 
                     var ruleset = getRuleset(beatmap.Ruleset);
                     int calculatorVersion = getCalculatorVersion(ruleset);
+                    var cachedRatings = modStarRatingCache.GetRatings(beatmap.MD5Hash, beatmap.Ruleset.ShortName, calculatorVersion);
 
                     // Created lazily so that beatmaps fully served from the cache never load their file contents.
                     DifficultyCalculator? calculator = null;
@@ -323,7 +324,7 @@ namespace osu.Game.Database
                         if (existingKeys.Contains(key))
                             continue;
 
-                        if (modStarRatingCache.TryGet(beatmap.MD5Hash, beatmap.Ruleset.ShortName, key, calculatorVersion, out double cachedRating))
+                        if (cachedRatings.TryGetValue(key, out double cachedRating))
                         {
                             computed.Add(new ModStarRating
                             {
