@@ -272,6 +272,33 @@ namespace osu.Game.Database
             int processedCount = 0;
             int failedCount = 0;
 
+            const int realm_write_batch_size = 1000;
+
+            var pendingRatings = new List<(Guid BeatmapID, List<ModStarRating> Ratings)>();
+
+            void flushPendingRatings()
+            {
+                if (pendingRatings.Count == 0)
+                    return;
+
+                realmAccess.Write(r =>
+                {
+                    foreach ((Guid beatmapID, List<ModStarRating> ratings) in pendingRatings)
+                    {
+                        if (r.Find<BeatmapInfo>(beatmapID) is not BeatmapInfo liveBeatmapInfo)
+                            continue;
+
+                        foreach (var rating in ratings)
+                        {
+                            if (liveBeatmapInfo.ModStarRatings.All(m => m.Mods != rating.Mods))
+                                liveBeatmapInfo.ModStarRatings.Add(rating);
+                        }
+                    }
+                });
+
+                pendingRatings.Clear();
+            }
+
             Dictionary<string, Ruleset> rulesetCache = new Dictionary<string, Ruleset>();
             Dictionary<string, int> calculatorVersionCache = new Dictionary<string, int>();
 
@@ -356,17 +383,10 @@ namespace osu.Game.Database
 
                     if (computed.Count > 0)
                     {
-                        realmAccess.Write(r =>
-                        {
-                            if (r.Find<BeatmapInfo>(id) is BeatmapInfo liveBeatmapInfo)
-                            {
-                                foreach (var rating in computed)
-                                {
-                                    if (liveBeatmapInfo.ModStarRatings.All(m => m.Mods != rating.Mods))
-                                        liveBeatmapInfo.ModStarRatings.Add(rating);
-                                }
-                            }
-                        });
+                        pendingRatings.Add((id, computed));
+
+                        if (pendingRatings.Count >= realm_write_batch_size)
+                            flushPendingRatings();
                     }
 
                     ++processedCount;
@@ -378,6 +398,7 @@ namespace osu.Game.Database
                 }
             }
 
+            flushPendingRatings();
             completeNotification(notification, processedCount, beatmapIds.Count, failedCount);
         }
 
