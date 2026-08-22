@@ -240,6 +240,14 @@ namespace osu.Game.Screens.Select
 
                 var rulesetCriteria = currentCriteria.RulesetCriteria;
                 if (rulesetCriteria?.FilterMayChangeFromMods(currentCriteria, m) == true)
+                {
+                    updateCriteria();
+                    return;
+                }
+
+                // Star rating filtering matches against the rating of the selected tracked mod combination,
+                // so criteria must be recreated when the selection moves to a different combination.
+                if (ModStarRatingCombinations.GetKey(m.NewValue) != currentCriteria.ModStarRatingKey)
                     updateCriteria();
             });
 
@@ -305,6 +313,7 @@ namespace osu.Game.Screens.Select
                 AllowConvertedBeatmaps = showConvertedBeatmapsButton.Active.Value,
                 Ruleset = ruleset.Value,
                 Mods = mods.Value,
+                ModStarRatingKey = ModStarRatingCombinations.GetKey(mods.Value),
                 Collection = collectionDropdown.Current.Value?.Collection,
                 LocalUserId = isValidUser ? localUser.Value.Id : null,
                 LocalUserUsername = isValidUser ? localUser.Value.Username : null,

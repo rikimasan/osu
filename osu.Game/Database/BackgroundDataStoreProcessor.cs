@@ -24,6 +24,8 @@ using osu.Game.Overlays;
 using osu.Game.Overlays.Notifications;
 using osu.Game.Performance;
 using osu.Game.Rulesets;
+using osu.Game.Rulesets.Difficulty;
+using osu.Game.Rulesets.Mods;
 using osu.Game.Scoring;
 using osu.Game.Scoring.Legacy;
 using osu.Game.Screens.Play;
@@ -76,6 +78,8 @@ namespace osu.Game.Database
 
         private LocalCachedBeatmapMetadataSource localMetadataSource = null!;
 
+        private ModStarRatingCache modStarRatingCache = null!;
+
         protected virtual int TimeToSleepDuringGameplay => 30000;
 
         protected virtual bool SkipProcessing => DebugUtils.IsNUnitRunning;
@@ -88,6 +92,7 @@ namespace osu.Game.Database
                 return;
 
             localMetadataSource = new LocalCachedBeatmapMetadataSource(storage);
+            modStarRatingCache = new ModStarRatingCache(storage);
 
             ProcessingTask = Task.Factory.StartNew(() =>
             {
@@ -98,6 +103,7 @@ namespace osu.Game.Database
                 processOnlineBeatmapSetsWithNoUpdate();
                 // Note that the previous method will also update these on a fresh run.
                 processBeatmapsWithMissingObjectCounts();
+                populateMissingModStarRatings();
                 processScoresWithMissingStatistics();
                 // ordering significant, `upgradeModMultipliers()` should run first as it will handle all scores
                 // (rather than only lazer scores, if it was called after `convertLegacyTotalScoreToStandardised()`)
@@ -142,6 +148,7 @@ namespace osu.Game.Database
                             if (b.Ruleset.ShortName == ruleset.ShortName)
                             {
                                 b.StarRating = -1;
+                                b.ModStarRatings.Clear();
                                 countReset++;
                             }
                         }
@@ -230,6 +237,168 @@ namespace osu.Game.Database
                 }
             }
 
+            completeNotification(notification, processedCount, beatmapIds.Count, failedCount);
+        }
+
+        /// <remarks>
+        /// Runs after <see cref="populateMissingStarRatings"/> so that unmodded ratings, which all of song select relies on,
+        /// are populated before this more expensive pass begins. Must also run after any step which may invoke
+        /// <see cref="BeatmapUpdater.Process"/> (ie. <see cref="processOnlineBeatmapSetsWithNoUpdate"/>), as that clears
+        /// mod star ratings and would discard this pass's results within the same run.
+        /// </remarks>
+        private void populateMissingModStarRatings()
+        {
+            HashSet<Guid> beatmapIds = new HashSet<Guid>();
+
+            Logger.Log("Querying for beatmaps with missing mod star ratings...");
+
+            realmAccess.Run(r =>
+            {
+                var incomplete = r.All<BeatmapInfo>().Filter(
+                    $@"{nameof(BeatmapInfo.ModStarRatings)}.@count < $0 && {nameof(BeatmapInfo.BeatmapSet)} != null",
+                    ModStarRatingCombinations.ALL_KEYS.Length);
+
+                foreach (var b in incomplete)
+                    beatmapIds.Add(b.ID);
+            });
+
+            if (beatmapIds.Count == 0)
+                return;
+
+            Logger.Log($"Found {beatmapIds.Count} beatmaps which require mod star rating processing.");
+
+            var notification = showProgressNotification(beatmapIds.Count, "Calculating star ratings with mods for beatmaps", "beatmaps' mod star ratings have been calculated");
+
+            int processedCount = 0;
+            int failedCount = 0;
+
+            const int realm_write_batch_size = 1000;
+
+            var pendingRatings = new List<(Guid BeatmapID, List<ModStarRating> Ratings)>();
+
+            void flushPendingRatings()
+            {
+                if (pendingRatings.Count == 0)
+                    return;
+
+                realmAccess.Write(r =>
+                {
+                    foreach ((Guid beatmapID, List<ModStarRating> ratings) in pendingRatings)
+                    {
+                        if (r.Find<BeatmapInfo>(beatmapID) is not BeatmapInfo liveBeatmapInfo)
+                            continue;
+
+                        foreach (var rating in ratings)
+                        {
+                            if (liveBeatmapInfo.ModStarRatings.All(m => m.Mods != rating.Mods))
+                                liveBeatmapInfo.ModStarRatings.Add(rating);
+                        }
+                    }
+                });
+
+                pendingRatings.Clear();
+            }
+
+            Dictionary<string, Ruleset> rulesetCache = new Dictionary<string, Ruleset>();
+            Dictionary<string, int> calculatorVersionCache = new Dictionary<string, int>();
+
+            Ruleset getRuleset(RulesetInfo rulesetInfo)
+            {
+                if (!rulesetCache.TryGetValue(rulesetInfo.ShortName, out var ruleset))
+                    ruleset = rulesetCache[rulesetInfo.ShortName] = rulesetInfo.CreateInstance();
+
+                return ruleset;
+            }
+
+            int getCalculatorVersion(Ruleset ruleset)
+            {
+                string shortName = ruleset.RulesetInfo.ShortName;
+
+                if (!calculatorVersionCache.TryGetValue(shortName, out int version))
+                    // The beatmap passed in is arbitrary here (as in clearOutdatedStarRatings); the version does not depend on it.
+                    version = calculatorVersionCache[shortName] = ruleset.CreateDifficultyCalculator(gameBeatmap.Value).Version;
+
+                return version;
+            }
+
+            foreach (Guid id in beatmapIds)
+            {
+                if (notification?.State == ProgressNotificationState.Cancelled)
+                    break;
+
+                updateNotificationProgress(notification, processedCount, beatmapIds.Count);
+
+                var beatmap = realmAccess.Run(r => r.Find<BeatmapInfo>(id)?.Detach());
+
+                if (beatmap == null)
+                    continue;
+
+                try
+                {
+                    HashSet<string> existingKeys = beatmap.ModStarRatings.Select(m => m.Mods).ToHashSet();
+
+                    var ruleset = getRuleset(beatmap.Ruleset);
+                    int calculatorVersion = getCalculatorVersion(ruleset);
+                    var cachedRatings = modStarRatingCache.GetRatings(beatmap.MD5Hash, beatmap.Ruleset.ShortName, calculatorVersion);
+
+                    // Created lazily so that beatmaps fully served from the cache never load their file contents.
+                    DifficultyCalculator? calculator = null;
+
+                    List<ModStarRating> computed = new List<ModStarRating>();
+
+                    foreach ((string key, string[] acronyms) in ModStarRatingCombinations.ALL_COMBINATIONS)
+                    {
+                        if (existingKeys.Contains(key))
+                            continue;
+
+                        if (cachedRatings.TryGetValue(key, out double cachedRating))
+                        {
+                            computed.Add(new ModStarRating
+                            {
+                                Mods = key,
+                                StarRating = cachedRating,
+                            });
+                            continue;
+                        }
+
+                        var mods = acronyms.Select(ruleset.CreateModFromAcronym).OfType<Mod>().ToArray();
+
+                        // The ruleset does not implement every tracked mod; the combination is left unstored.
+                        if (mods.Length != acronyms.Length)
+                            continue;
+
+                        sleepIfRequired();
+
+                        calculator ??= ruleset.CreateDifficultyCalculator(beatmapManager.GetWorkingBeatmap(beatmap));
+
+                        double starRating = calculator.Calculate(mods).StarRating;
+                        modStarRatingCache.Store(beatmap.MD5Hash, beatmap.Ruleset.ShortName, key, calculatorVersion, starRating);
+
+                        computed.Add(new ModStarRating
+                        {
+                            Mods = key,
+                            StarRating = starRating,
+                        });
+                    }
+
+                    if (computed.Count > 0)
+                    {
+                        pendingRatings.Add((id, computed));
+
+                        if (pendingRatings.Count >= realm_write_batch_size)
+                            flushPendingRatings();
+                    }
+
+                    ++processedCount;
+                }
+                catch (Exception e)
+                {
+                    Logger.Log($"Background processing failed on {beatmap}: {e}");
+                    ++failedCount;
+                }
+            }
+
+            flushPendingRatings();
             completeNotification(notification, processedCount, beatmapIds.Count, failedCount);
         }
 
