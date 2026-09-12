@@ -2,6 +2,7 @@
 // See the LICENCE file in the repository root for full licence text.
 
 using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using osu.Game.Beatmaps;
 using osu.Game.Rulesets.Mods;
@@ -19,95 +20,117 @@ namespace osu.Game.Rulesets.Osu.Tests.Mods
     public partial class TestSceneOsuModPreciseTapping : OsuModTestScene
     {
         [Test]
-        public void TestPressWithoutHitMissesNextObject() => CreateModTest(new ModTestData
+        public void TestTapOnPenalisedObjectDoesNotMissNextObject() => CreateModTest(new ModTestData
         {
             Mod = new OsuModPreciseTapping(),
-            PassCondition = () => Player.ScoreProcessor.Statistics.GetValueOrDefault(HitResult.Miss) == 1,
             Autoplay = false,
-            CreateBeatmap = () => new Beatmap
-            {
-                HitObjects = new List<HitObject>
-                {
-                    new HitCircle
-                    {
-                        StartTime = 500,
-                        Position = new Vector2(100),
-                    },
-                    new HitCircle
-                    {
-                        StartTime = 1000,
-                        Position = new Vector2(200, 100),
-                    },
-                },
-            },
-            ReplayFrames = new List<ReplayFrame>
-            {
-                new OsuReplayFrame(250, new Vector2(300, 100), OsuAction.LeftButton),
-                new OsuReplayFrame(251, new Vector2(300, 100)),
-                new OsuReplayFrame(500, new Vector2(100), OsuAction.LeftButton),
-            }
+            CreateBeatmap = () => createCircleBeatmap(
+                (500, new Vector2(100)),
+                (800, new Vector2(100))),
+            ReplayFrames = createTapReplay(
+                (400, new Vector2(300, 300), OsuAction.LeftButton),
+                (500, new Vector2(100), OsuAction.LeftButton),
+                (520, new Vector2(100), OsuAction.RightButton),
+                (800, new Vector2(100), OsuAction.LeftButton)),
+            PassCondition = () => hasCompletedWithResults(1, 1),
+        });
+
+        [TestCase(1000, 100, 100, 1)]
+        [TestCase(1000, 130, 130, 2)]
+        [TestCase(850, 100, 100, 2)]
+        [TestCase(1150, 100, 100, 2)]
+        public void TestTapOnPenalisedObjectRequiresOriginalHitAreaAndWindow(double tapTime, float x, float y, int expectedMisses) => CreateModTest(new ModTestData
+        {
+            Mod = new OsuModPreciseTapping(),
+            Autoplay = false,
+            CreateBeatmap = () => createCircleBeatmap(
+                (500, new Vector2(400, 100)),
+                (1000, new Vector2(100)),
+                (1500, new Vector2(200, 100))),
+            ReplayFrames = createTapReplay(
+                (500, new Vector2(400, 100), OsuAction.LeftButton),
+                (700, new Vector2(100), OsuAction.LeftButton),
+                (tapTime, new Vector2(x, y), OsuAction.LeftButton),
+                (1500, new Vector2(200, 100), OsuAction.LeftButton)),
+            PassCondition = () => hasCompletedWithResults(expectedMisses, 3 - expectedMisses),
         });
 
         [Test]
-        public void TestExtraPressChainMissesNextObject() => CreateModTest(new ModTestData
+        public void TestValidHitTakesPriorityOverTapOnPenalisedObject() => CreateModTest(new ModTestData
         {
             Mod = new OsuModPreciseTapping(),
-            PassCondition = () => Player.ScoreProcessor.Statistics.GetValueOrDefault(HitResult.Miss) == 2,
             Autoplay = false,
-            CreateBeatmap = () => new Beatmap
-            {
-                HitObjects = new List<HitObject>
-                {
-                    new HitCircle
-                    {
-                        StartTime = 500,
-                        Position = new Vector2(100),
-                    },
-                    new HitCircle
-                    {
-                        StartTime = 700,
-                        Position = new Vector2(200, 100),
-                    },
-                },
-            },
-            ReplayFrames = new List<ReplayFrame>
-            {
-                new OsuReplayFrame(400, new Vector2(300, 300), OsuAction.LeftButton),
-                new OsuReplayFrame(401, new Vector2(300, 300)),
-                new OsuReplayFrame(500, new Vector2(100), OsuAction.LeftButton),
-                new OsuReplayFrame(501, new Vector2(100)),
-                new OsuReplayFrame(700, new Vector2(200, 100), OsuAction.LeftButton),
-                new OsuReplayFrame(701, new Vector2(200, 100)),
-            }
+            CreateBeatmap = () => createCircleBeatmap(
+                (500, new Vector2(100)),
+                (600, new Vector2(100)),
+                (1000, new Vector2(300, 100))),
+            ReplayFrames = createTapReplay(
+                (400, new Vector2(300, 300), OsuAction.LeftButton),
+                (600, new Vector2(100), OsuAction.LeftButton),
+                (620, new Vector2(100), OsuAction.RightButton),
+                (1000, new Vector2(300, 100), OsuAction.LeftButton)),
+            PassCondition = () => hasCompletedWithResults(1, 2),
         });
+
+        [Test]
+        public void TestTapsOnMultiplePenalisedObjectsDoNotMissNextObject() => CreateModTest(new ModTestData
+        {
+            Mod = new OsuModPreciseTapping(),
+            Autoplay = false,
+            CreateBeatmap = () => createCircleBeatmap(
+                (500, new Vector2(100)),
+                (600, new Vector2(200, 100)),
+                (1000, new Vector2(300, 100))),
+            ReplayFrames = createTapReplay(
+                (400, new Vector2(300, 300), OsuAction.LeftButton),
+                (420, new Vector2(300, 300), OsuAction.LeftButton),
+                (500, new Vector2(100), OsuAction.LeftButton),
+                (600, new Vector2(200, 100), OsuAction.LeftButton),
+                (1000, new Vector2(300, 100), OsuAction.LeftButton)),
+            PassCondition = () => hasCompletedWithResults(2, 1),
+        });
+
+        [TestCase(350)]
+        [TestCase(450)]
+        public void TestRewind(double seekTime)
+        {
+            bool replayed = false;
+
+            CreateModTest(new ModTestData
+            {
+                Mod = new OsuModPreciseTapping(),
+                Autoplay = false,
+                CreateBeatmap = () => createCircleBeatmap(
+                    (500, new Vector2(100)),
+                    (1000, new Vector2(200, 100))),
+                ReplayFrames = createTapReplay(
+                    (400, new Vector2(300, 300), OsuAction.LeftButton),
+                    (500, new Vector2(100), OsuAction.LeftButton),
+                    (1000, new Vector2(200, 100), OsuAction.LeftButton)),
+                PassCondition = () => replayed && hasCompletedWithResults(1, 1),
+            });
+
+            AddUntilStep("first play completed", () => hasCompletedWithResults(1, 1));
+            AddStep("rewind", () =>
+            {
+                Player.GameplayClockContainer.Stop();
+                Player.Seek(seekTime);
+            });
+            AddUntilStep("rewind completed", () => Player.DrawableRuleset.FrameStableClock.CurrentTime == seekTime);
+            AddAssert("penalty follows rewind", () => Player.ScoreProcessor.Statistics.GetValueOrDefault(HitResult.Miss), () => Is.EqualTo(seekTime < 400 ? 0 : 1));
+            AddStep("replay", () =>
+            {
+                replayed = true;
+                Player.GameplayClockContainer.Start();
+            });
+        }
 
         [Test]
         public void TestExtraPressDuringSliderMissesNextObject() => CreateModTest(new ModTestData
         {
             Mod = new OsuModPreciseTapping(),
-            PassCondition = () => Player.ScoreProcessor.Statistics.GetValueOrDefault(HitResult.Miss) == 1,
             Autoplay = false,
-            CreateBeatmap = () => new Beatmap
-            {
-                HitObjects = new List<HitObject>
-                {
-                    new Slider
-                    {
-                        StartTime = 500,
-                        Position = new Vector2(100),
-                        Path = new SliderPath(PathType.LINEAR, new[]
-                        {
-                            Vector2.Zero,
-                            new Vector2(100, 0),
-                        }),
-                    },
-                    new HitCircle
-                    {
-                        StartTime = 1500,
-                        Position = new Vector2(300, 100),
-                    },
-                },
-            },
+            CreateBeatmap = createSliderBeatmap,
             ReplayFrames = new List<ReplayFrame>
             {
                 new OsuReplayFrame(500, new Vector2(100), OsuAction.LeftButton),
@@ -116,73 +139,97 @@ namespace osu.Game.Rulesets.Osu.Tests.Mods
                 new OsuReplayFrame(900, new Vector2(200, 100)),
                 new OsuReplayFrame(1500, new Vector2(300, 100), OsuAction.LeftButton),
                 new OsuReplayFrame(1501, new Vector2(300, 100)),
-            }
+            },
+            PassCondition = () => hasCompletedWithResults(1, 1),
+        });
+
+        [Test]
+        public void TestTapOnPenalisedSliderHeadDoesNotMissNextObject() => CreateModTest(new ModTestData
+        {
+            Mod = new OsuModPreciseTapping(),
+            Autoplay = false,
+            CreateBeatmap = createSliderBeatmap,
+            ReplayFrames = new List<ReplayFrame>
+            {
+                new OsuReplayFrame(400, new Vector2(300, 300), OsuAction.LeftButton),
+                new OsuReplayFrame(401, new Vector2(300, 300)),
+                new OsuReplayFrame(500, new Vector2(100), OsuAction.LeftButton),
+                new OsuReplayFrame(900, new Vector2(200, 100)),
+                new OsuReplayFrame(1500, new Vector2(300, 100), OsuAction.LeftButton),
+                new OsuReplayFrame(1501, new Vector2(300, 100)),
+            },
+            PassCondition = () => hasCompletedWithResults(1, 1),
         });
 
         [Test]
         public void TestMisaimOnLaterObjectDoesNotRegisterHit() => CreateModTest(new ModTestData
         {
             Mod = new OsuModPreciseTapping(),
-            PassCondition = () => Player.ScoreProcessor.Statistics.GetValueOrDefault(HitResult.Miss) == 1
-                                  && Player.ScoreProcessor.Statistics.GetValueOrDefault(HitResult.Great) == 1,
             Autoplay = false,
-            CreateBeatmap = () => new Beatmap
-            {
-                HitObjects = new List<HitObject>
-                {
-                    new HitCircle
-                    {
-                        StartTime = 500,
-                        Position = new Vector2(100),
-                    },
-                    new HitCircle
-                    {
-                        StartTime = 700,
-                        Position = new Vector2(200, 100),
-                    },
-                },
-            },
-            ReplayFrames = new List<ReplayFrame>
-            {
-                new OsuReplayFrame(595, new Vector2(200, 100), OsuAction.LeftButton),
-                new OsuReplayFrame(596, new Vector2(200, 100)),
-                new OsuReplayFrame(700, new Vector2(200, 100), OsuAction.LeftButton),
-                new OsuReplayFrame(701, new Vector2(200, 100)),
-            }
+            CreateBeatmap = () => createCircleBeatmap(
+                (500, new Vector2(100)),
+                (700, new Vector2(200, 100))),
+            ReplayFrames = createTapReplay(
+                (595, new Vector2(200, 100), OsuAction.LeftButton),
+                (700, new Vector2(200, 100), OsuAction.LeftButton)),
+            PassCondition = () => hasCompletedWithResults(1, 1),
         });
 
         [Test]
         public void TestPressBlockedByAlternateIsNotCountedAsExtra() => CreateModTest(new ModTestData
         {
             Mods = new Mod[] { new OsuModAlternate(), new OsuModPreciseTapping() },
-            PassCondition = () => Player.ScoreProcessor.Statistics.GetValueOrDefault(HitResult.Great) == 2
-                                  && Player.ScoreProcessor.Statistics.GetValueOrDefault(HitResult.Miss) == 0,
             Autoplay = false,
-            CreateBeatmap = () => new Beatmap
+            CreateBeatmap = () => createCircleBeatmap(
+                (500, new Vector2(100)),
+                (1000, new Vector2(200, 100))),
+            ReplayFrames = createTapReplay(
+                (500, new Vector2(100), OsuAction.LeftButton),
+                (700, new Vector2(150, 100), OsuAction.LeftButton),
+                (1000, new Vector2(200, 100), OsuAction.RightButton)),
+            PassCondition = () => hasCompletedWithResults(0, 2),
+        });
+
+        private static Beatmap createCircleBeatmap(params (double startTime, Vector2 position)[] circles) => new Beatmap
+        {
+            Difficulty = new BeatmapDifficulty { OverallDifficulty = 5, CircleSize = 5 },
+            HitObjects = circles.Select(circle => (HitObject)new HitCircle
             {
-                HitObjects = new List<HitObject>
+                StartTime = circle.startTime,
+                Position = circle.position,
+            }).ToList(),
+        };
+
+        private static Beatmap createSliderBeatmap() => new Beatmap
+        {
+            HitObjects = new List<HitObject>
+            {
+                new Slider
                 {
-                    new HitCircle
+                    StartTime = 500,
+                    Position = new Vector2(100),
+                    Path = new SliderPath(PathType.LINEAR, new[]
                     {
-                        StartTime = 500,
-                        Position = new Vector2(100),
-                    },
-                    new HitCircle
-                    {
-                        StartTime = 1000,
-                        Position = new Vector2(200, 100),
-                    },
+                        Vector2.Zero,
+                        new Vector2(100, 0),
+                    }),
+                },
+                new HitCircle
+                {
+                    StartTime = 1500,
+                    Position = new Vector2(300, 100),
                 },
             },
-            ReplayFrames = new List<ReplayFrame>
-            {
-                new OsuReplayFrame(500, new Vector2(100), OsuAction.LeftButton),
-                new OsuReplayFrame(501, new Vector2(100)),
-                new OsuReplayFrame(700, new Vector2(150, 100), OsuAction.LeftButton),
-                new OsuReplayFrame(701, new Vector2(150, 100)),
-                new OsuReplayFrame(1000, new Vector2(200, 100), OsuAction.RightButton),
-                new OsuReplayFrame(1001, new Vector2(200, 100)),
-            }
-        });
+        };
+
+        private static List<ReplayFrame> createTapReplay(params (double time, Vector2 position, OsuAction action)[] taps) => taps.SelectMany(tap => new ReplayFrame[]
+        {
+            new OsuReplayFrame(tap.time, tap.position, tap.action),
+            new OsuReplayFrame(tap.time + 1, tap.position),
+        }).ToList();
+
+        private bool hasCompletedWithResults(int misses, int greats) => Player.ScoreProcessor.HasCompleted.Value
+                                                                      && Player.ScoreProcessor.Statistics.GetValueOrDefault(HitResult.Miss) == misses
+                                                                      && Player.ScoreProcessor.Statistics.GetValueOrDefault(HitResult.Great) == greats;
     }
 }
