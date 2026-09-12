@@ -7,8 +7,10 @@ using System.Linq;
 using osu.Framework.Graphics;
 using osu.Framework.Input.Bindings;
 using osu.Framework.Input.Events;
+using osu.Framework.Lists;
 using osu.Framework.Localisation;
 using osu.Game.Beatmaps.Timing;
+using osu.Game.Rulesets.Judgements;
 using osu.Game.Rulesets.Mods;
 using osu.Game.Rulesets.Objects;
 using osu.Game.Rulesets.Osu.Objects;
@@ -17,6 +19,7 @@ using osu.Game.Rulesets.Osu.UI;
 using osu.Game.Rulesets.Scoring;
 using osu.Game.Rulesets.UI;
 using osu.Game.Utils;
+using osuTK;
 
 namespace osu.Game.Rulesets.Osu.Mods
 {
@@ -36,10 +39,14 @@ namespace osu.Game.Rulesets.Osu.Mods
 
         private IFrameStableClock gameplayClock = null!;
 
+        private readonly SortedList<PenalisedHitObject> penalisedHitObjects = new SortedList<PenalisedHitObject>((a, b) => a.HitWindow.End.CompareTo(b.HitWindow.End));
+
         public void ApplyToDrawableRuleset(DrawableRuleset<OsuHitObject> drawableRuleset)
         {
             ruleset = (DrawableOsuRuleset)drawableRuleset;
             ruleset.Playfield.AttachInputInterceptor(new InputInterceptor(this));
+            penalisedHitObjects.Clear();
+            ruleset.RevertResult += result => penalisedHitObjects.RemoveAll(p => p.Result == result);
 
             var periods = new List<Period>();
 
@@ -76,6 +83,49 @@ namespace osu.Game.Rulesets.Osu.Mods
             return null;
         }
 
+        private bool isTapOnPenalisedHitObject(Vector2 screenSpacePosition)
+        {
+            double time = gameplayClock.CurrentTime;
+            var playfieldPosition = ruleset.Playfield.HitObjectContainer.ToLocalSpace(screenSpacePosition);
+
+            // Keep expired records for rewinds, but only examine windows which can still contain this press.
+            for (int i = penalisedHitObjects.Count - 1; i >= 0; i--)
+            {
+                var penalised = penalisedHitObjects[i];
+
+                if (time > penalised.HitWindow.End)
+                    break;
+
+                if (time < penalised.HitWindow.Start)
+                    continue;
+
+                var hitAreaPosition = Vector2Extensions.Transform(playfieldPosition, penalised.PlayfieldToHitArea);
+
+                if (Vector2.DistanceSquared(hitAreaPosition, OsuHitObject.OBJECT_DIMENSIONS / 2) <= OsuHitObject.OBJECT_RADIUS * OsuHitObject.OBJECT_RADIUS)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private class PenalisedHitObject
+        {
+            public readonly JudgementResult Result;
+            public readonly Period HitWindow;
+            public readonly Matrix3 PlayfieldToHitArea;
+
+            public PenalisedHitObject(DrawableHitCircle circle, OsuPlayfield playfield)
+            {
+                Result = circle.Result;
+
+                double hitWindow = circle.HitObject.HitWindows.WindowFor(HitResult.Meh);
+                HitWindow = new Period(circle.HitObject.StartTime - hitWindow, circle.HitObject.StartTime + hitWindow);
+
+                // Capture the hit area before the miss animation or drawable pooling changes it.
+                PlayfieldToHitArea = playfield.HitObjectContainer.DrawInfo.Matrix * circle.HitArea.DrawInfo.MatrixInverse;
+            }
+        }
+
         private partial class InputInterceptor : Component, IKeyBindingHandler<OsuAction>
         {
             private readonly OsuModPreciseTapping mod;
@@ -101,10 +151,28 @@ namespace osu.Game.Rulesets.Osu.Mods
                 if (tappable == null)
                     return true;
 
-                tappable.HitArea.OnPressed(e);
+                bool withinHitWindow = tappable.HitObject.HitWindows.ResultFor(mod.gameplayClock.CurrentTime - tappable.HitObject.StartTime).IsHit();
+
+                if (withinHitWindow)
+                {
+                    tappable.HitArea.OnPressed(e);
+
+                    if (tappable.Result?.HasResult == true)
+                        return true;
+                }
+
+                if (mod.isTapOnPenalisedHitObject(e.ScreenSpaceMousePosition))
+                    return true;
+
+                var penalised = new PenalisedHitObject(tappable, mod.ruleset.Playfield);
+
+                if (!withinHitWindow)
+                    tappable.HitArea.OnPressed(e);
 
                 if (tappable.Result?.HasResult != true)
                     tappable.MissForcefully();
+
+                mod.penalisedHitObjects.Add(penalised);
 
                 return true;
             }
