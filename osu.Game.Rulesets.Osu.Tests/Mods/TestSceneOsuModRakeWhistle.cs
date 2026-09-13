@@ -17,12 +17,12 @@ using osuTK;
 
 namespace osu.Game.Rulesets.Osu.Tests.Mods
 {
-    public partial class TestSceneOsuModPreciseTapping : OsuModTestScene
+    public partial class TestSceneOsuModRakeWhistle : OsuModTestScene
     {
         [Test]
         public void TestTapOnPenalisedObjectDoesNotMissNextObject() => CreateModTest(new ModTestData
         {
-            Mod = new OsuModPreciseTapping(),
+            Mod = new OsuModRakeWhistle(),
             Autoplay = false,
             CreateBeatmap = () => createCircleBeatmap(
                 (500, new Vector2(100)),
@@ -41,7 +41,7 @@ namespace osu.Game.Rulesets.Osu.Tests.Mods
         [TestCase(1150, 100, 100, 2)]
         public void TestTapOnPenalisedObjectRequiresOriginalHitAreaAndWindow(double tapTime, float x, float y, int expectedMisses) => CreateModTest(new ModTestData
         {
-            Mod = new OsuModPreciseTapping(),
+            Mod = new OsuModRakeWhistle(),
             Autoplay = false,
             CreateBeatmap = () => createCircleBeatmap(
                 (500, new Vector2(400, 100)),
@@ -58,7 +58,7 @@ namespace osu.Game.Rulesets.Osu.Tests.Mods
         [Test]
         public void TestValidHitTakesPriorityOverTapOnPenalisedObject() => CreateModTest(new ModTestData
         {
-            Mod = new OsuModPreciseTapping(),
+            Mod = new OsuModRakeWhistle(),
             Autoplay = false,
             CreateBeatmap = () => createCircleBeatmap(
                 (500, new Vector2(100)),
@@ -75,7 +75,7 @@ namespace osu.Game.Rulesets.Osu.Tests.Mods
         [Test]
         public void TestTapsOnMultiplePenalisedObjectsDoNotMissNextObject() => CreateModTest(new ModTestData
         {
-            Mod = new OsuModPreciseTapping(),
+            Mod = new OsuModRakeWhistle(),
             Autoplay = false,
             CreateBeatmap = () => createCircleBeatmap(
                 (500, new Vector2(100)),
@@ -98,7 +98,7 @@ namespace osu.Game.Rulesets.Osu.Tests.Mods
 
             CreateModTest(new ModTestData
             {
-                Mod = new OsuModPreciseTapping(),
+                Mod = new OsuModRakeWhistle(),
                 Autoplay = false,
                 CreateBeatmap = () => createCircleBeatmap(
                     (500, new Vector2(100)),
@@ -128,7 +128,7 @@ namespace osu.Game.Rulesets.Osu.Tests.Mods
         [Test]
         public void TestExtraPressDuringSliderMissesNextObject() => CreateModTest(new ModTestData
         {
-            Mod = new OsuModPreciseTapping(),
+            Mod = new OsuModRakeWhistle(),
             Autoplay = false,
             CreateBeatmap = createSliderBeatmap,
             ReplayFrames = new List<ReplayFrame>
@@ -146,7 +146,7 @@ namespace osu.Game.Rulesets.Osu.Tests.Mods
         [Test]
         public void TestTapOnPenalisedSliderHeadDoesNotMissNextObject() => CreateModTest(new ModTestData
         {
-            Mod = new OsuModPreciseTapping(),
+            Mod = new OsuModRakeWhistle(),
             Autoplay = false,
             CreateBeatmap = createSliderBeatmap,
             ReplayFrames = new List<ReplayFrame>
@@ -164,7 +164,7 @@ namespace osu.Game.Rulesets.Osu.Tests.Mods
         [Test]
         public void TestMisaimOnLaterObjectDoesNotRegisterHit() => CreateModTest(new ModTestData
         {
-            Mod = new OsuModPreciseTapping(),
+            Mod = new OsuModRakeWhistle(),
             Autoplay = false,
             CreateBeatmap = () => createCircleBeatmap(
                 (500, new Vector2(100)),
@@ -178,7 +178,7 @@ namespace osu.Game.Rulesets.Osu.Tests.Mods
         [Test]
         public void TestPressBlockedByAlternateIsNotCountedAsExtra() => CreateModTest(new ModTestData
         {
-            Mods = new Mod[] { new OsuModAlternate(), new OsuModPreciseTapping() },
+            Mods = new Mod[] { new OsuModAlternate(), new OsuModRakeWhistle() },
             Autoplay = false,
             CreateBeatmap = () => createCircleBeatmap(
                 (500, new Vector2(100)),

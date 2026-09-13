@@ -23,11 +23,11 @@ using osuTK;
 
 namespace osu.Game.Rulesets.Osu.Mods
 {
-    public partial class OsuModPreciseTapping : Mod, IApplicableToDrawableRuleset<OsuHitObject>
+    public partial class OsuModRakeWhistle : Mod, IApplicableToDrawableRuleset<OsuHitObject>
     {
-        public override string Name => @"Precise Tapping";
-        public override string Acronym => @"PT";
-        public override LocalisableString Description => @"Extra key presses count as misses.";
+        public override string Name => @"Rake Whistle";
+        public override string Acronym => @"RW";
+        public override LocalisableString Description => @"Wouldn't want people to think you're a cheater.";
         public override double ScoreMultiplier => 1.0;
         public override ModType Type => ModType.Conversion;
         public override bool Ranked => true;
@@ -128,9 +128,9 @@ namespace osu.Game.Rulesets.Osu.Mods
 
         private partial class InputInterceptor : Component, IKeyBindingHandler<OsuAction>
         {
-            private readonly OsuModPreciseTapping mod;
+            private readonly OsuModRakeWhistle mod;
 
-            public InputInterceptor(OsuModPreciseTapping mod)
+            public InputInterceptor(OsuModRakeWhistle mod)
             {
                 this.mod = mod;
             }

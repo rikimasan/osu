@@ -209,7 +209,7 @@ namespace osu.Game.Rulesets.Osu
                         new OsuModRandom(),
                         new OsuModMirror(),
                         new MultiMod(new OsuModAlternate(), new OsuModSingleTap()),
-                        new OsuModPreciseTapping()
+                        new OsuModRakeWhistle()
                     };
 
                 case ModType.Automation:
