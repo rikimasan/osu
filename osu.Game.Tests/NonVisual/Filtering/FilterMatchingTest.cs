@@ -56,6 +56,44 @@ namespace osu.Game.Tests.NonVisual.Filtering
         };
 
         [Test]
+        public void TestCriteriaMatchingModStarRating()
+        {
+            var exampleBeatmapInfo = getExampleBeatmap();
+            exampleBeatmapInfo.ModStarRatings.Add(new ModStarRating { Mods = "DTHD", StarRating = 5.8 });
+
+            // The unmodded rating (4.0) is outside the filtered range; the mod rating (5.8) is within it.
+            var criteria = new FilterCriteria { ModStarRatingKey = "DTHD" };
+            criteria.UserStarDifficulty.Min = 5.0;
+            criteria.UserStarDifficulty.Max = 6.0;
+
+            var carouselItem = new CarouselBeatmap(exampleBeatmapInfo);
+            carouselItem.Filter(criteria);
+            ClassicAssert.False(carouselItem.Filtered.Value);
+
+            var noKeyCriteria = new FilterCriteria();
+            noKeyCriteria.UserStarDifficulty.Min = 5.0;
+            noKeyCriteria.UserStarDifficulty.Max = 6.0;
+
+            carouselItem.Filter(noKeyCriteria);
+            ClassicAssert.True(carouselItem.Filtered.Value);
+        }
+
+        [Test]
+        public void TestCriteriaMatchingModStarRatingFallsBackWhenNotCalculated()
+        {
+            var exampleBeatmapInfo = getExampleBeatmap();
+
+            var criteria = new FilterCriteria { ModStarRatingKey = "DTHD" };
+            criteria.UserStarDifficulty.Min = 3.5;
+            criteria.UserStarDifficulty.Max = 4.5;
+
+            // No rating is stored for the key, so the unmodded rating (4.0) applies.
+            var carouselItem = new CarouselBeatmap(exampleBeatmapInfo);
+            carouselItem.Filter(criteria);
+            ClassicAssert.False(carouselItem.Filtered.Value);
+        }
+
+        [Test]
         public void TestCriteriaMatchingNoRuleset()
         {
             var exampleBeatmapInfo = getExampleBeatmap();

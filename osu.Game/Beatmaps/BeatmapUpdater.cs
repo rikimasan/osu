@@ -61,6 +61,8 @@ namespace osu.Game.Beatmaps
                     var calculator = ruleset.CreateDifficultyCalculator(working);
 
                     beatmap.StarRating = calculator.Calculate().StarRating;
+                    // Repopulated by BackgroundDataStoreProcessor on next startup; recalculating all combinations here would slow imports and editor saves.
+                    beatmap.ModStarRatings.Clear();
                     beatmap.UpdateStatisticsFromBeatmap(working.Beatmap);
                 }
 
